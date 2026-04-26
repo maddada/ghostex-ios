@@ -69,6 +69,8 @@ struct TerminalSettingsView: View {
     @State private var builtInThemeNames: [String] = []
     @State private var customThemeErrorMessage: String?
     @State private var showingCustomThemeManager = false
+    @State private var showingResetKnownHostsConfirmation = false
+    @State private var knownHostCount = 0
 
     private var builtInThemeOptions: [String] {
         Set(builtInThemeNames)
@@ -332,6 +334,33 @@ struct TerminalSettingsView: View {
         }
     }
 
+    private var dangerZoneSection: some View {
+        Section {
+            Button(role: .destructive) {
+                showingResetKnownHostsConfirmation = true
+            } label: {
+                Label("Reset Trusted SSH Hosts", systemImage: "trash")
+                    .foregroundStyle(.red)
+            }
+            .tint(.red)
+            .disabled(knownHostCount == 0)
+        } header: {
+            Text("Danger Zone")
+        } footer: {
+            Text(knownHostsFooterText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var knownHostsFooterText: String {
+        let count = Int64(knownHostCount)
+        if count == 1 {
+            return String(localized: "VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection.")
+        }
+        return String(format: String(localized: "VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection."), count)
+    }
+
     var body: some View {
         Form {
             fontSection
@@ -342,6 +371,7 @@ struct TerminalSettingsView: View {
             copyProcessingSection
             richClipboardSection
             sshConnectionSection
+            dangerZoneSection
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showingCustomThemeManager) {
@@ -375,6 +405,15 @@ struct TerminalSettingsView: View {
         } message: {
             Text(customThemeErrorMessage ?? "")
         }
+        .alert("Reset Trusted SSH Hosts", isPresented: $showingResetKnownHostsConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                KnownHostsManager.shared.removeAll()
+                refreshKnownHostCount()
+            }
+        } message: {
+            Text("VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.")
+        }
         .onChange(of: themeName) { _ in
             ensureThemeSelectionIsValid()
         }
@@ -398,6 +437,7 @@ struct TerminalSettingsView: View {
                 builtInThemeNames = TerminalThemeManager.builtInThemeNames()
             }
             ensureThemeSelectionIsValid()
+            refreshKnownHostCount()
         }
     }
 
@@ -410,6 +450,10 @@ struct TerminalSettingsView: View {
         guard !trimmed.isEmpty else { return systemFonts }
         guard !systemFonts.contains(trimmed) else { return systemFonts }
         return [trimmed] + systemFonts
+    }
+
+    private func refreshKnownHostCount() {
+        knownHostCount = KnownHostsManager.shared.entries().count
     }
 
     #if os(macOS)

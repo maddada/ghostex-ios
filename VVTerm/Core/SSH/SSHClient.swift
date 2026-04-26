@@ -2851,7 +2851,8 @@ enum SSHError: LocalizedError {
         case .timeout: return "Connection timed out"
         case .channelOpenFailed: return "Failed to open channel"
         case .shellRequestFailed: return "Failed to request shell"
-        case .hostKeyVerificationFailed: return "Host key verification failed"
+        case .hostKeyVerificationFailed:
+            return "Host key verification failed. The saved SSH host fingerprint does not match the server's current key."
         case .socketError(let msg): return "Socket error: \(msg)"
         case .unknown(let msg): return "Unknown error: \(msg)"
         }

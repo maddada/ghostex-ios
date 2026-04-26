@@ -47,6 +47,34 @@ final class KnownHostsManager: @unchecked Sendable {
         saveAll(entries)
     }
 
+    func remove(host: String, port: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        var entries = loadAll()
+        let key = hostKey(host: host, port: port)
+        guard entries.removeValue(forKey: key) != nil else { return }
+        saveAll(entries)
+        logger.info("Removed known host entry for \(host):\(port)")
+    }
+
+    func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        UserDefaults.standard.removeObject(forKey: storageKey)
+        logger.info("Removed all known host entries")
+    }
+
+    func entries() -> [Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        return loadAll().values.sorted { lhs, rhs in
+            if lhs.host == rhs.host {
+                return lhs.port < rhs.port
+            }
+            return lhs.host < rhs.host
+        }
+    }
+
     private func hostKey(host: String, port: Int) -> String {
         "\(host):\(port)"
     }

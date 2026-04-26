@@ -643,6 +643,17 @@ final class ServerManager: ObservableObject {
         Dictionary(uniqueKeysWithValues: servers.map { ($0.id, $0) })
     }
 
+    private func removeKnownHostIfUnused(for server: Server, excluding deletedServerIDs: Set<UUID> = []) {
+        let isStillUsed = servers.contains {
+            !deletedServerIDs.contains($0.id)
+                && $0.id != server.id
+                && $0.host == server.host
+                && $0.port == server.port
+        }
+        guard !isStillUsed else { return }
+        KnownHostsManager.shared.remove(host: server.host, port: server.port)
+    }
+
     private func sortedWorkspaces(from workspaceMap: [UUID: Workspace]) -> [Workspace] {
         Array(workspaceMap.values).sorted { $0.order < $1.order }
     }
@@ -723,6 +734,10 @@ final class ServerManager: ObservableObject {
 
     private func removeServers(withIDs ids: [UUID]) {
         let idSet = Set(ids)
+        let removedServers = servers.filter { idSet.contains($0.id) }
+        for server in removedServers {
+            removeKnownHostIfUnused(for: server, excluding: idSet)
+        }
         servers.removeAll { idSet.contains($0.id) }
     }
 
@@ -915,6 +930,7 @@ final class ServerManager: ObservableObject {
     func deleteServer(_ server: Server) async throws {
         try keychain.deleteCredentials(for: server.id)
 
+        removeKnownHostIfUnused(for: server)
         servers.removeAll { $0.id == server.id }
         enqueuePendingServerDelete(server)
         await persistLocalMutations(logMessage: "Deleted server: \(server.name)")
