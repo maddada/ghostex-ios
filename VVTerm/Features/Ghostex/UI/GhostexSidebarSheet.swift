@@ -4,6 +4,42 @@ import UIKit
 #endif
 
 #if os(iOS)
+private extension GhostexAgentIdentity {
+    static func systemSymbolName(for iconId: String) -> String {
+        switch iconId {
+        case "codex": return "circle.hexagongrid.fill"
+        case "claude": return "sparkle"
+        case "cursor-cli": return "cursorarrow"
+        case "gemini": return "sparkles"
+        case "copilot": return "person.2.fill"
+        case "factory-droid": return "gearshape.2.fill"
+        case "browser": return "globe"
+        case "pi": return "function"
+        case "opencode": return "chevron.left.forwardslash.chevron.right"
+        case "t3": return "t.circle.fill"
+        case "antigravity-cli": return "arrow.up.right.circle.fill"
+        case "amp-cli": return "bolt.fill"
+        case "grok-build": return "xmark.circle.fill"
+        default: return "terminal.fill"
+        }
+    }
+
+    static func tint(for iconId: String) -> Color {
+        switch iconId {
+        case "antigravity-cli": return Color(red: 0.45, green: 0.61, blue: 1.0)
+        case "browser": return Color(red: 0.51, green: 0.72, blue: 1.0)
+        case "claude": return Color(red: 0.85, green: 0.47, blue: 0.34)
+        case "cursor-cli": return Color(red: 0.93, green: 0.93, blue: 0.93)
+        case "factory-droid": return Color(red: 1.0, green: 0.48, blue: 0.10)
+        case "gemini": return Color(red: 0.55, green: 0.60, blue: 1.0)
+        case "opencode": return Color(red: 0.43, green: 0.59, blue: 0.75)
+        case "pi": return Color(red: 0.78, green: 1.0, blue: 0.38)
+        case "t3": return Color(red: 1.0, green: 0.42, blue: 0.95)
+        default: return .primary
+        }
+    }
+}
+
 struct GhostexSidebarSheet: View {
     @ObservedObject var serverManager: ServerManager
     @ObservedObject var sessionManager: ConnectionSessionManager
