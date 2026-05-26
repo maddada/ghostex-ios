@@ -8,6 +8,10 @@ struct TerminalAccessoryCustomizationView: View {
         preferences.activeItems
     }
 
+    private var activeRows: [[TerminalAccessoryItemRef]] {
+        preferences.activeRows
+    }
+
     private var activeSystemActions: Set<TerminalAccessorySystemActionID> {
         Set(activeItems.compactMap { item in
             if case .system(let actionID) = item {
@@ -46,45 +50,62 @@ struct TerminalAccessoryCustomizationView: View {
     var body: some View {
         Form {
             Section("Preview") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        previewChip(String(localized: "Ctrl"))
-                        previewChip(String(localized: "Alt"))
-                        previewChip(String(localized: "Shift"))
-                        ForEach(activeItems, id: \.self) { item in
-                            previewChip(label(for: item))
+                VStack(spacing: 6) {
+                    ForEach(0..<TerminalAccessoryProfile.rowCount, id: \.self) { rowIndex in
+                        HStack(spacing: 6) {
+                            ForEach(0..<TerminalAccessoryProfile.itemsPerRow, id: \.self) { columnIndex in
+                                if let item = item(atRow: rowIndex, column: columnIndex) {
+                                    previewChip(label(for: item))
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    emptyPreviewChip()
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
                         }
                     }
-                    .padding(.vertical, 4)
                 }
+                .padding(.vertical, 4)
             }
 
-            Section {
-                ForEach(activeItems, id: \.self) { item in
-                    HStack(spacing: 10) {
-                        Text(label(for: item))
-                        Spacer(minLength: 8)
-                        if let detail = detailLabel(for: item) {
-                            Text(detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            ForEach(0..<TerminalAccessoryProfile.rowCount, id: \.self) { rowIndex in
+                Section {
+                    let row = activeRow(at: rowIndex)
+                    if row.isEmpty {
+                        Text("No items")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(row.enumerated()), id: \.element) { _, item in
+                            HStack(spacing: 10) {
+                                Text(label(for: item))
+                                Spacer(minLength: 8)
+                                if let detail = detailLabel(for: item) {
+                                    Text(detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .onDelete { offsets in
+                            preferences.removeActiveItems(inRow: rowIndex, atOffsets: offsets)
+                        }
+                        .onMove { offsets, destination in
+                            preferences.moveActiveItems(inRow: rowIndex, fromOffsets: offsets, toOffset: destination)
                         }
                     }
-                }
-                .onDelete(perform: preferences.removeActiveItems)
-                .onMove(perform: preferences.moveActiveItems)
-            } header: {
-                Text("Active Items")
-            } footer: {
-                Text(
-                    String(
-                        format: String(localized: "Ctrl, Alt, and Shift stay fixed. Add Cmd if you want it on the bar. %lld/%lld active items."),
-                        Int64(activeItems.count),
-                        Int64(TerminalAccessoryProfile.maxActiveItems)
+                } header: {
+                    Text(rowTitle(rowIndex))
+                } footer: {
+                    Text(
+                        String(
+                            format: String(localized: "%lld/%lld items"),
+                            Int64(activeRow(at: rowIndex).count),
+                            Int64(TerminalAccessoryProfile.itemsPerRow)
+                        )
                     )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
 
             Section("Available System Actions") {
@@ -96,10 +117,7 @@ struct TerminalAccessoryCustomizationView: View {
                         HStack {
                             Text(actionID.listTitle)
                             Spacer(minLength: 8)
-                            Button("Add") {
-                                preferences.addActiveItem(.system(actionID))
-                            }
-                            .disabled(activeItems.count >= TerminalAccessoryProfile.maxActiveItems)
+                            rowAddButtons(for: .system(actionID))
                         }
                     }
                 }
@@ -125,10 +143,7 @@ struct TerminalAccessoryCustomizationView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 8)
-                            Button("Add") {
-                                preferences.addActiveItem(.custom(action.id))
-                            }
-                            .disabled(activeItems.count >= TerminalAccessoryProfile.maxActiveItems)
+                            rowAddButtons(for: .custom(action.id))
                         }
                     }
                 }
@@ -170,12 +185,59 @@ struct TerminalAccessoryCustomizationView: View {
         Text(title)
             .font(.caption.weight(.medium))
             .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, 4)
             .padding(.vertical, 6)
             .background(
                 Capsule(style: .continuous)
                     .fill(Color.primary.opacity(0.08))
             )
+    }
+
+    @ViewBuilder
+    private func emptyPreviewChip() -> some View {
+        Text(" ")
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+            )
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func rowAddButtons(for item: TerminalAccessoryItemRef) -> some View {
+        HStack(spacing: 8) {
+            ForEach(0..<TerminalAccessoryProfile.rowCount, id: \.self) { rowIndex in
+                Button(rowTitle(rowIndex)) {
+                    preferences.addActiveItem(item, toRow: rowIndex)
+                }
+                .buttonStyle(.borderless)
+                .disabled(activeItems.contains(item) || rowIsFull(rowIndex))
+            }
+        }
+    }
+
+    private func rowTitle(_ rowIndex: Int) -> String {
+        String(format: String(localized: "Row %lld"), Int64(rowIndex + 1))
+    }
+
+    private func activeRow(at rowIndex: Int) -> [TerminalAccessoryItemRef] {
+        guard activeRows.indices.contains(rowIndex) else { return [] }
+        return activeRows[rowIndex]
+    }
+
+    private func item(atRow rowIndex: Int, column columnIndex: Int) -> TerminalAccessoryItemRef? {
+        let row = activeRow(at: rowIndex)
+        guard row.indices.contains(columnIndex) else { return nil }
+        return row[columnIndex]
+    }
+
+    private func rowIsFull(_ rowIndex: Int) -> Bool {
+        activeRow(at: rowIndex).count >= TerminalAccessoryProfile.itemsPerRow
     }
 
     private func label(for item: TerminalAccessoryItemRef) -> String {

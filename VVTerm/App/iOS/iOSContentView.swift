@@ -798,7 +798,7 @@ struct iOSTerminalView: View {
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
     @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
-    @AppStorage("terminalVoiceButtonEnabled") private var terminalVoiceButtonEnabled = true
+    @AppStorage("terminalVoiceButtonEnabled") private var terminalVoiceButtonEnabled = false
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }
         return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight

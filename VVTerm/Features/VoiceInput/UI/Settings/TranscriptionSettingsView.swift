@@ -12,7 +12,7 @@ struct TranscriptionSettingsView: View {
     @AppStorage(TranscriptionSettingsKeys.mlxWhisperModelId) private var whisperModelId = TranscriptionSettingsDefaults.mlxWhisperModelId
     @AppStorage(TranscriptionSettingsKeys.mlxParakeetModelId) private var parakeetModelId = TranscriptionSettingsDefaults.mlxParakeetModelId
     @AppStorage("transcriptionLanguage") private var language = "en"
-    @AppStorage("terminalVoiceButtonEnabled") private var terminalVoiceButtonEnabled = true
+    @AppStorage("terminalVoiceButtonEnabled") private var terminalVoiceButtonEnabled = false
 
     @StateObject private var whisperManager: MLXModelManager
     @StateObject private var parakeetManager: MLXModelManager

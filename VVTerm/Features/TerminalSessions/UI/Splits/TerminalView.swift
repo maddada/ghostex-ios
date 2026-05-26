@@ -30,7 +30,7 @@ struct TerminalTabView: View {
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Aizen Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
-    @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
+    @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = false
 
     @StateObject private var audioService = AudioService()
     @State private var showingVoiceRecording = false

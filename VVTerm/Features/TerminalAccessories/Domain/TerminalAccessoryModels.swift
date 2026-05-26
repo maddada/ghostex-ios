@@ -365,7 +365,10 @@ enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable {
 }
 
 enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable {
+    case controlModifier
+    case alternateModifier
     case commandModifier
+    case shiftModifier
     case escape
     case tab
     case shiftTab
@@ -399,6 +402,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
     case ctrlL
     case ctrlA
     case ctrlE
+    case ctrlJ
     case ctrlK
     case ctrlU
     case unknown
@@ -418,7 +422,10 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
 
     var listTitle: String {
         switch self {
+        case .controlModifier: return String(localized: "Ctrl")
+        case .alternateModifier: return String(localized: "Alt")
         case .commandModifier: return String(localized: "Cmd")
+        case .shiftModifier: return String(localized: "Shift")
         case .escape: return String(localized: "Esc")
         case .tab: return String(localized: "Tab")
         case .shiftTab: return String(localized: "Shift+Tab")
@@ -452,6 +459,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
         case .ctrlL: return String(localized: "Ctrl+L")
         case .ctrlA: return String(localized: "Ctrl+A")
         case .ctrlE: return String(localized: "Ctrl+E")
+        case .ctrlJ: return String(localized: "Ctrl+J")
         case .ctrlK: return String(localized: "Ctrl+K")
         case .ctrlU: return String(localized: "Ctrl+U")
         case .unknown: return String(localized: "Unknown")
@@ -460,7 +468,10 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
 
     var toolbarTitle: String {
         switch self {
+        case .controlModifier: return String(localized: "Ctrl")
+        case .alternateModifier: return String(localized: "Alt")
         case .commandModifier: return String(localized: "Cmd")
+        case .shiftModifier: return String(localized: "Shift")
         case .escape: return String(localized: "Esc")
         case .tab: return String(localized: "Tab")
         case .shiftTab: return String(localized: "S-Tab")
@@ -491,6 +502,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
         case .ctrlL: return String(localized: "^L")
         case .ctrlA: return String(localized: "^A")
         case .ctrlE: return String(localized: "^E")
+        case .ctrlJ: return String(localized: "^J")
         case .ctrlK: return String(localized: "^K")
         case .ctrlU: return String(localized: "^U")
         case .unknown: return String(localized: "?")
@@ -644,7 +656,45 @@ struct TerminalSnippet: Identifiable, Codable, Equatable {
 struct TerminalAccessoryLayout: Codable, Equatable {
     var version: Int
     var activeItems: [TerminalAccessoryItemRef]
+    var activeRows: [[TerminalAccessoryItemRef]]
     var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case activeItems
+        case activeRows
+        case updatedAt
+    }
+
+    init(
+        version: Int,
+        activeItems: [TerminalAccessoryItemRef],
+        activeRows: [[TerminalAccessoryItemRef]]? = nil,
+        updatedAt: Date
+    ) {
+        self.version = version
+        self.activeRows = activeRows ?? TerminalAccessoryProfile.rows(fromLegacyActiveItems: activeItems)
+        self.activeItems = self.activeRows.flatMap { $0 }
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        let decodedActiveItems = try container.decodeIfPresent([TerminalAccessoryItemRef].self, forKey: .activeItems) ?? []
+        activeRows = try container.decodeIfPresent([[TerminalAccessoryItemRef]].self, forKey: .activeRows)
+            ?? TerminalAccessoryProfile.rows(fromLegacyActiveItems: decodedActiveItems)
+        activeItems = activeRows.flatMap { $0 }
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(activeRows.flatMap { $0 }, forKey: .activeItems)
+        try container.encode(activeRows, forKey: .activeRows)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
 }
 
 struct TerminalAccessoryProfile: Codable, Equatable {
@@ -681,7 +731,7 @@ struct TerminalAccessoryProfile: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         layout = try container.decodeIfPresent(TerminalAccessoryLayout.self, forKey: .layout)
-            ?? TerminalAccessoryLayout(version: 1, activeItems: Self.defaultActiveItems, updatedAt: .distantPast)
+            ?? TerminalAccessoryLayout(version: 1, activeItems: Self.defaultActiveItems, activeRows: Self.defaultActiveRows, updatedAt: .distantPast)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
         lastWriterDeviceId = try container.decodeIfPresent(String.self, forKey: .lastWriterDeviceId) ?? DeviceIdentity.id
 
@@ -709,13 +759,15 @@ extension TerminalAccessoryProfile {
     static let recordName = "terminalAccessory.v1"
     static let defaultsKey = CloudKitSyncConstants.terminalAccessoryProfileStorageKey
 
-    static let minActiveItems = 4
-    static let maxActiveItems = 28
+    static let rowCount = 2
+    static let itemsPerRow = 7
+    static let minActiveItems = 1
+    static let maxActiveItems = rowCount * itemsPerRow
     static let maxCustomActions = 100
     static let maxCustomActionTitleLength = 24
     static let maxCommandContentLength = 2048
 
-    static let defaultActiveItems: [TerminalAccessoryItemRef] = [
+    private static let legacyDefaultActiveItems: [TerminalAccessoryItemRef] = [
         .system(.escape),
         .system(.tab),
         .system(.arrowUp),
@@ -733,12 +785,38 @@ extension TerminalAccessoryProfile {
         .system(.pageDown)
     ]
 
+    static let defaultActiveRows: [[TerminalAccessoryItemRef]] = [
+        [
+            .system(.escape),
+            .system(.ctrlU),
+            .system(.ctrlJ),
+            .system(.home),
+            .system(.arrowUp),
+            .system(.end),
+            .system(.pageUp)
+        ],
+        [
+            .system(.tab),
+            .system(.controlModifier),
+            .system(.alternateModifier),
+            .system(.arrowLeft),
+            .system(.arrowDown),
+            .system(.arrowRight),
+            .system(.pageDown)
+        ]
+    ]
+
+    static var defaultActiveItems: [TerminalAccessoryItemRef] {
+        defaultActiveRows.flatMap { $0 }
+    }
+
     static var defaultValue: TerminalAccessoryProfile {
         TerminalAccessoryProfile(
             schemaVersion: schemaVersion,
             layout: TerminalAccessoryLayout(
                 version: 1,
                 activeItems: defaultActiveItems,
+                activeRows: defaultActiveRows,
                 updatedAt: .distantPast
             ),
             customActions: [],
@@ -749,6 +827,23 @@ extension TerminalAccessoryProfile {
 
     static var availableSystemActions: [TerminalAccessorySystemActionID] {
         TerminalAccessorySystemActionID.allCases.filter { $0 != .unknown }
+    }
+
+    static func rows(fromLegacyActiveItems items: [TerminalAccessoryItemRef]) -> [[TerminalAccessoryItemRef]] {
+        if items == legacyDefaultActiveItems || items.isEmpty {
+            return defaultActiveRows
+        }
+
+        var rows: [[TerminalAccessoryItemRef]] = []
+        var remainingItems = Array(items.prefix(maxActiveItems))
+        for _ in 0..<rowCount {
+            rows.append(Array(remainingItems.prefix(itemsPerRow)))
+            remainingItems = Array(remainingItems.dropFirst(itemsPerRow))
+        }
+        while rows.count < rowCount {
+            rows.append([])
+        }
+        return rows
     }
 
     func normalized() -> TerminalAccessoryProfile {
@@ -785,26 +880,47 @@ extension TerminalAccessoryProfile {
         let activeActionIDs = Set(normalizedAndLimitedActions.filter { !$0.isDeleted }.map(\.id))
 
         var seenItems = Set<TerminalAccessoryItemRef>()
-        var normalizedItems: [TerminalAccessoryItemRef] = []
+        var normalizedRows: [[TerminalAccessoryItemRef]] = []
 
-        for item in layout.activeItems {
-            switch item {
-            case .system(let actionID):
-                guard actionID != .unknown else { continue }
-            case .custom(let actionID):
-                guard activeActionIDs.contains(actionID) else { continue }
+        for rawRow in layout.activeRows.prefix(Self.rowCount) {
+            var normalizedRow: [TerminalAccessoryItemRef] = []
+
+            for item in rawRow {
+                guard normalizedRow.count < Self.itemsPerRow else { break }
+
+                switch item {
+                case .system(let actionID):
+                    guard actionID != .unknown else { continue }
+                case .custom(let actionID):
+                    guard activeActionIDs.contains(actionID) else { continue }
+                }
+
+                guard !seenItems.contains(item) else { continue }
+                seenItems.insert(item)
+                normalizedRow.append(item)
             }
 
-            guard !seenItems.contains(item) else { continue }
-            seenItems.insert(item)
-            normalizedItems.append(item)
+            normalizedRows.append(normalizedRow)
+        }
+
+        while normalizedRows.count < Self.rowCount {
+            normalizedRows.append([])
+        }
+
+        var normalizedItems = normalizedRows.flatMap { $0 }
+
+        if normalizedItems.isEmpty {
+            normalizedRows = Self.defaultActiveRows
+            normalizedItems = Self.defaultActiveItems
         }
 
         if normalizedItems.count > Self.maxActiveItems {
             normalizedItems = Array(normalizedItems.prefix(Self.maxActiveItems))
+            normalizedRows = Self.rows(fromLegacyActiveItems: normalizedItems)
         }
 
         if normalizedItems.count < Self.minActiveItems {
+            normalizedRows = Self.defaultActiveRows
             normalizedItems = Self.defaultActiveItems
         }
 
@@ -813,6 +929,7 @@ extension TerminalAccessoryProfile {
             layout: TerminalAccessoryLayout(
                 version: max(1, layout.version),
                 activeItems: normalizedItems,
+                activeRows: normalizedRows,
                 updatedAt: layout.updatedAt
             ),
             customActions: Array(normalizedAndLimitedActions),

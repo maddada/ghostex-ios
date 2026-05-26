@@ -3540,7 +3540,7 @@ indirect enum TerminalKey {
     case arrowUp, arrowDown, arrowLeft, arrowRight
     case home, end, pageUp, pageDown
     case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
-    case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlK, ctrlU
+    case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlJ, ctrlK, ctrlU
     case modified(TerminalKey, mods: Ghostty.Input.Mods)
 
     func withCtrl() -> TerminalKey {
@@ -3602,6 +3602,7 @@ indirect enum TerminalKey {
         case .ctrlL: return Data([0x0C])
         case .ctrlA: return Data([0x01])
         case .ctrlE: return Data([0x05])
+        case .ctrlJ: return Data([0x0A])
         case .ctrlK: return Data([0x0B])
         case .ctrlU: return Data([0x15])
         case .modified(let key, _):
@@ -3744,6 +3745,8 @@ extension GhosttyTerminalView {
             sendToolbarControlShortcut(.a, letter: "a", mods: accumulatedMods)
         case .ctrlE:
             sendToolbarControlShortcut(.e, letter: "e", mods: accumulatedMods)
+        case .ctrlJ:
+            sendToolbarControlShortcut(.j, letter: "j", mods: accumulatedMods)
         case .ctrlK:
             sendToolbarControlShortcut(.k, letter: "k", mods: accumulatedMods)
         case .ctrlU:
@@ -3867,7 +3870,7 @@ private class TerminalInputAccessoryView: UIInputView {
     private weak var leadingButtonsStack: UIStackView?
     private weak var leadingButtonsSeparatorView: UIView?
     private weak var backgroundEffectView: UIVisualEffectView?
-    private weak var dynamicItemsStack: UIStackView?
+    private weak var dynamicRowsStack: UIStackView?
     private var scrollLeadingToLeadingButtonsConstraint: NSLayoutConstraint?
     private var scrollLeadingToEdgeConstraint: NSLayoutConstraint?
     private var defaultsObserver: NSObjectProtocol?
@@ -3885,7 +3888,7 @@ private class TerminalInputAccessoryView: UIInputView {
         self.onCustomAction = onCustomAction
         self.onVoice = onVoice
         self.onDismissKeyboard = onDismissKeyboard
-        super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 48), inputViewStyle: .keyboard)
+        super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 88), inputViewStyle: .keyboard)
         setupView()
         observeThemeChanges()
         observeAccessoryProfileChanges()
@@ -3893,6 +3896,10 @@ private class TerminalInputAccessoryView: UIInputView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) not supported")
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: 88)
     }
 
     deinit {
@@ -3921,12 +3928,6 @@ private class TerminalInputAccessoryView: UIInputView {
         backgroundEffectView = blur
         updateBackgroundEffect()
 
-        let scrollView = UIScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
-        addSubview(scrollView)
-
         let leadingStack = UIStackView()
         leadingStack.translatesAutoresizingMaskIntoConstraints = false
         leadingStack.axis = .horizontal
@@ -3954,8 +3955,17 @@ private class TerminalInputAccessoryView: UIInputView {
         leadingButtonsSeparatorView = leadingButtonsSeparator
         addSubview(leadingButtonsSeparator)
 
-        let leadingToButtons = scrollView.leadingAnchor.constraint(equalTo: leadingButtonsSeparator.trailingAnchor, constant: 10)
-        let leadingToEdge = scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
+        let rowsStack = UIStackView()
+        rowsStack.translatesAutoresizingMaskIntoConstraints = false
+        rowsStack.axis = .vertical
+        rowsStack.spacing = 6
+        rowsStack.alignment = .fill
+        rowsStack.distribution = .fillEqually
+        addSubview(rowsStack)
+        dynamicRowsStack = rowsStack
+
+        let leadingToButtons = rowsStack.leadingAnchor.constraint(equalTo: leadingButtonsSeparator.trailingAnchor, constant: 10)
+        let leadingToEdge = rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
         scrollLeadingToLeadingButtonsConstraint = leadingToButtons
         scrollLeadingToEdgeConstraint = leadingToEdge
 
@@ -3966,59 +3976,11 @@ private class TerminalInputAccessoryView: UIInputView {
             leadingButtonsSeparator.leadingAnchor.constraint(equalTo: leadingStack.trailingAnchor, constant: 10),
             leadingButtonsSeparator.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -7),
             leadingToButtons,
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor)
+            rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10)
         ])
-
-        let stack = UIStackView()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.spacing = 8
-        stack.alignment = .center
-        stack.distribution = .fill
-        stack.isLayoutMarginsRelativeArrangement = false
-        scrollView.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -8),
-            stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -12),
-            stack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor, constant: -16)
-        ])
-
-        // Modifier buttons (always first, separated)
-        let ctrl = makeModifierButton(title: String(localized: "Ctrl")) { [weak self] in
-            self?.ctrlActive.toggle()
-            self?.updateModifierState()
-        }
-        let alt = makeModifierButton(title: String(localized: "Alt")) { [weak self] in
-            self?.altActive.toggle()
-            self?.updateModifierState()
-        }
-        let shift = makeModifierButton(title: String(localized: "Shift")) { [weak self] in
-            self?.shiftActive.toggle()
-            self?.updateModifierState()
-        }
-        ctrlButton = ctrl
-        altButton = alt
-        shiftButton = shift
-        stack.addArrangedSubview(ctrl)
-        stack.addArrangedSubview(alt)
-        stack.addArrangedSubview(shift)
-        stack.addArrangedSubview(makeSeparator())
-
-        let dynamicStack = UIStackView()
-        dynamicStack.translatesAutoresizingMaskIntoConstraints = false
-        dynamicStack.axis = .horizontal
-        dynamicStack.spacing = 8
-        dynamicStack.alignment = .center
-        // Keep intrinsic widths for text buttons and let UIScrollView handle overflow.
-        dynamicStack.setContentHuggingPriority(.required, for: .horizontal)
-        dynamicStack.setContentCompressionResistancePriority(.required, for: .horizontal)
-        stack.addArrangedSubview(dynamicStack)
-        dynamicItemsStack = dynamicStack
 
         rebuildAccessoryItems()
         updateLeadingButtonsState()
@@ -4097,31 +4059,85 @@ private class TerminalInputAccessoryView: UIInputView {
     }
 
     private func rebuildAccessoryItems() {
-        guard let dynamicItemsStack else { return }
+        guard let dynamicRowsStack else { return }
 
-        for arrangedSubview in dynamicItemsStack.arrangedSubviews {
-            dynamicItemsStack.removeArrangedSubview(arrangedSubview)
+        ctrlButton = nil
+        altButton = nil
+        commandButton = nil
+        shiftButton = nil
+
+        for arrangedSubview in dynamicRowsStack.arrangedSubviews {
+            dynamicRowsStack.removeArrangedSubview(arrangedSubview)
             arrangedSubview.removeFromSuperview()
         }
 
         let profile = TerminalAccessoryPreferencesManager.shared.profile
         let customActionsByID = Dictionary(uniqueKeysWithValues: profile.customActions.filter { !$0.isDeleted }.map { ($0.id, $0) })
 
-        for item in profile.layout.activeItems {
-            switch item {
-            case .system(let actionID):
-                guard let button = makeSystemActionButton(for: actionID) else { continue }
-                dynamicItemsStack.addArrangedSubview(button)
-            case .custom(let actionID):
-                guard let action = customActionsByID[actionID] else { continue }
-                let button = makeCustomActionButton(for: action)
-                dynamicItemsStack.addArrangedSubview(button)
+        for rowIndex in 0..<TerminalAccessoryProfile.rowCount {
+            let rowStack = UIStackView()
+            rowStack.translatesAutoresizingMaskIntoConstraints = false
+            rowStack.axis = .horizontal
+            rowStack.spacing = 6
+            rowStack.alignment = .center
+            rowStack.distribution = .fillEqually
+            dynamicRowsStack.addArrangedSubview(rowStack)
+
+            let row = profile.layout.activeRows.indices.contains(rowIndex)
+                ? profile.layout.activeRows[rowIndex]
+                : []
+
+            for columnIndex in 0..<TerminalAccessoryProfile.itemsPerRow {
+                guard row.indices.contains(columnIndex) else {
+                    rowStack.addArrangedSubview(makeGridPlaceholder())
+                    continue
+                }
+
+                let item = row[columnIndex]
+                switch item {
+                case .system(let actionID):
+                    guard let button = makeSystemActionButton(for: actionID) else {
+                        rowStack.addArrangedSubview(makeGridPlaceholder())
+                        continue
+                    }
+                    prepareGridButton(button)
+                    rowStack.addArrangedSubview(button)
+                case .custom(let actionID):
+                    guard let action = customActionsByID[actionID] else {
+                        rowStack.addArrangedSubview(makeGridPlaceholder())
+                        continue
+                    }
+                    let button = makeCustomActionButton(for: action)
+                    prepareGridButton(button)
+                    rowStack.addArrangedSubview(button)
+                }
             }
         }
+
+        updateModifierState()
     }
 
     private func makeSystemActionButton(for actionID: TerminalAccessorySystemActionID) -> UIButton? {
-        if actionID == .commandModifier {
+        switch actionID {
+        case .controlModifier:
+            let button = makeModifierButton(title: actionID.toolbarTitle) { [weak self] in
+                self?.ctrlActive.toggle()
+                self?.updateModifierState()
+            }
+            button.accessibilityLabel = actionID.listTitle
+            ctrlButton = button
+            updateModifierButton(button, isActive: ctrlActive)
+            return button
+        case .alternateModifier:
+            let button = makeModifierButton(title: actionID.toolbarTitle) { [weak self] in
+                self?.altActive.toggle()
+                self?.updateModifierState()
+            }
+            button.accessibilityLabel = actionID.listTitle
+            altButton = button
+            updateModifierButton(button, isActive: altActive)
+            return button
+        case .commandModifier:
             let button = makeModifierButton(title: actionID.toolbarTitle) { [weak self] in
                 self?.commandActive.toggle()
                 self?.updateModifierState()
@@ -4130,6 +4146,17 @@ private class TerminalInputAccessoryView: UIInputView {
             commandButton = button
             updateModifierButton(button, isActive: commandActive)
             return button
+        case .shiftModifier:
+            let button = makeModifierButton(title: actionID.toolbarTitle) { [weak self] in
+                self?.shiftActive.toggle()
+                self?.updateModifierState()
+            }
+            button.accessibilityLabel = actionID.listTitle
+            shiftButton = button
+            updateModifierButton(button, isActive: shiftActive)
+            return button
+        default:
+            break
         }
 
         guard let terminalKey = terminalKey(for: actionID) else { return nil }
@@ -4137,9 +4164,9 @@ private class TerminalInputAccessoryView: UIInputView {
         let button: UIButton
         if let iconName = actionID.iconName {
             if actionID.isRepeatable {
-                button = makeRepeatableIconButton(icon: iconName, key: terminalKey)
+                button = makeRepeatableIconButton(icon: iconName, key: terminalKey, fixedWidth: false)
             } else {
-                button = makeIconButton(icon: iconName) { [weak self] in
+                button = makeIconButton(icon: iconName, fixedWidth: false) { [weak self] in
                     self?.sendKey(terminalKey)
                 }
             }
@@ -4155,6 +4182,29 @@ private class TerminalInputAccessoryView: UIInputView {
         return button
     }
 
+    private func prepareGridButton(_ button: UIButton) {
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if #available(iOS 15.0, *), var config = button.configuration {
+            config.titleLineBreakMode = .byClipping
+            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
+            button.configuration = config
+        } else {
+            button.contentEdgeInsets = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 6)
+        }
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.adjustsFontSizeToFitWidth = true
+        button.titleLabel?.minimumScaleFactor = 0.72
+        button.titleLabel?.lineBreakMode = .byClipping
+    }
+
+    private func makeGridPlaceholder() -> UIView {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
     private func makeCustomActionButton(for action: TerminalAccessoryCustomAction) -> UIButton {
         let visibleTitle = String(action.title.prefix(12))
         let title = visibleTitle.isEmpty ? action.kind.title : visibleTitle
@@ -4167,7 +4217,7 @@ private class TerminalInputAccessoryView: UIInputView {
 
     private func terminalKey(for actionID: TerminalAccessorySystemActionID) -> TerminalKey? {
         switch actionID {
-        case .commandModifier: return nil
+        case .controlModifier, .alternateModifier, .commandModifier, .shiftModifier: return nil
         case .escape: return .escape
         case .tab: return .tab
         case .shiftTab: return .tab.withShift()
@@ -4201,6 +4251,7 @@ private class TerminalInputAccessoryView: UIInputView {
         case .ctrlL: return .ctrlL
         case .ctrlA: return .ctrlA
         case .ctrlE: return .ctrlE
+        case .ctrlJ: return .ctrlJ
         case .ctrlK: return .ctrlK
         case .ctrlU: return .ctrlU
         case .unknown: return nil
@@ -4241,31 +4292,36 @@ private class TerminalInputAccessoryView: UIInputView {
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
         if #available(iOS 15.0, *) {
             var config = UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
+            config.titleLineBreakMode = .byClipping
             config.attributedTitle = AttributedString(
                 title,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .medium)])
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 13, weight: .semibold)])
             )
-            config.baseForegroundColor = .label
+            config.baseForegroundColor = .secondaryLabel
             button.configuration = config
         } else {
             button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(.label, for: .normal)
-            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+            button.setTitleColor(.secondaryLabel, for: .normal)
+            button.contentEdgeInsets = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 6)
         }
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.lineBreakMode = .byClipping
         button.backgroundColor = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
+                ? UIColor.white.withAlphaComponent(0.08)
+                : UIColor.black.withAlphaComponent(0.04)
         }
-        button.layer.cornerRadius = 16
+        button.layer.cornerRadius = 14
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor.separator.withAlphaComponent(0.3).cgColor
         button.addAction(UIAction { _ in
             onTap()
         }, for: .touchUpInside)
 
         NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 32)
+            button.heightAnchor.constraint(equalToConstant: 28)
         ])
 
         return button
@@ -4281,25 +4337,30 @@ private class TerminalInputAccessoryView: UIInputView {
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
         if #available(iOS 15.0, *) {
             var config = UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
+            config.titleLineBreakMode = .byClipping
             config.attributedTitle = AttributedString(
                 title,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .medium)])
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 13, weight: .semibold)])
             )
-            config.baseForegroundColor = .label
+            config.baseForegroundColor = .secondaryLabel
             button.configuration = config
         } else {
             button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(.label, for: .normal)
-            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+            button.setTitleColor(.secondaryLabel, for: .normal)
+            button.contentEdgeInsets = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 6)
         }
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.lineBreakMode = .byClipping
         button.backgroundColor = UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor.white.withAlphaComponent(0.12)
-                : UIColor.black.withAlphaComponent(0.06)
+                ? UIColor.white.withAlphaComponent(0.08)
+                : UIColor.black.withAlphaComponent(0.04)
         }
-        button.layer.cornerRadius = 16
+        button.layer.cornerRadius = 14
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor.separator.withAlphaComponent(0.3).cgColor
 
         button.addTarget(self, action: #selector(repeatButtonDown(_:)), for: .touchDown)
         button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchUpInside)
@@ -4308,13 +4369,13 @@ private class TerminalInputAccessoryView: UIInputView {
         button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchDragExit)
 
         NSLayoutConstraint.activate([
-            button.heightAnchor.constraint(equalToConstant: 32)
+            button.heightAnchor.constraint(equalToConstant: 28)
         ])
 
         return button
     }
 
-    private func makeIconButton(icon: String, onTap: @escaping () -> Void) -> UIButton {
+    private func makeIconButton(icon: String, fixedWidth: Bool = true, onTap: @escaping () -> Void) -> UIButton {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
         let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
@@ -4330,15 +4391,16 @@ private class TerminalInputAccessoryView: UIInputView {
             onTap()
         }, for: .touchUpInside)
 
-        NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
+        var constraints = [button.heightAnchor.constraint(equalToConstant: 32)]
+        if fixedWidth {
+            constraints.append(button.widthAnchor.constraint(equalToConstant: 36))
+        }
+        NSLayoutConstraint.activate(constraints)
 
         return button
     }
 
-    private func makeRepeatableIconButton(icon: String, key: TerminalKey) -> UIButton {
+    private func makeRepeatableIconButton(icon: String, key: TerminalKey, fixedWidth: Bool = true) -> UIButton {
         let button = RepeatableKeyButton(type: .system)
         button.key = key
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -4358,10 +4420,11 @@ private class TerminalInputAccessoryView: UIInputView {
         button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchCancel)
         button.addTarget(self, action: #selector(repeatButtonUp(_:)), for: .touchDragExit)
 
-        NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 32)
-        ])
+        var constraints = [button.heightAnchor.constraint(equalToConstant: 32)]
+        if fixedWidth {
+            constraints.append(button.widthAnchor.constraint(equalToConstant: 36))
+        }
+        NSLayoutConstraint.activate(constraints)
 
         return button
     }
@@ -4534,7 +4597,7 @@ private class TerminalInputAccessoryView: UIInputView {
 
     private func updateLeadingButtonsState() {
         let defaults = UserDefaults.standard
-        let voiceEnabled = (defaults.object(forKey: "terminalVoiceButtonEnabled") as? Bool ?? true) && onVoice != nil
+        let voiceEnabled = (defaults.object(forKey: "terminalVoiceButtonEnabled") as? Bool ?? false) && onVoice != nil
         let dismissEnabled = defaults.object(forKey: "terminalKeyboardDismissButtonEnabled") as? Bool ?? true
         let hasVisibleLeadingButton = voiceEnabled || dismissEnabled
 

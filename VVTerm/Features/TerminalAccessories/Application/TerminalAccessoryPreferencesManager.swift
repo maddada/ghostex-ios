@@ -62,6 +62,10 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         profile.layout.activeItems
     }
 
+    var activeRows: [[TerminalAccessoryItemRef]] {
+        profile.layout.activeRows
+    }
+
     var customActions: [TerminalAccessoryCustomAction] {
         profile.customActions
             .filter { !$0.isDeleted }
@@ -184,9 +188,23 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         updateLayoutItems(nextItems)
     }
 
+    func moveActiveItems(inRow rowIndex: Int, fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        guard profile.layout.activeRows.indices.contains(rowIndex) else { return }
+        var nextRows = profile.layout.activeRows
+        nextRows[rowIndex] = moveItems(nextRows[rowIndex], fromOffsets: offsets, toOffset: destination)
+        updateLayoutRows(nextRows)
+    }
+
     func removeActiveItems(atOffsets offsets: IndexSet) {
         let nextItems = removeItems(profile.layout.activeItems, atOffsets: offsets)
         updateLayoutItems(nextItems)
+    }
+
+    func removeActiveItems(inRow rowIndex: Int, atOffsets offsets: IndexSet) {
+        guard profile.layout.activeRows.indices.contains(rowIndex) else { return }
+        var nextRows = profile.layout.activeRows
+        nextRows[rowIndex] = removeItems(nextRows[rowIndex], atOffsets: offsets)
+        updateLayoutRows(nextRows)
     }
 
     func removeActiveItem(_ item: TerminalAccessoryItemRef) {
@@ -202,9 +220,19 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         updateLayoutItems(nextItems)
     }
 
+    func addActiveItem(_ item: TerminalAccessoryItemRef, toRow rowIndex: Int) {
+        guard !profile.layout.activeItems.contains(item) else { return }
+        guard profile.layout.activeRows.indices.contains(rowIndex) else { return }
+        guard profile.layout.activeRows[rowIndex].count < TerminalAccessoryProfile.itemsPerRow else { return }
+        var nextRows = profile.layout.activeRows
+        nextRows[rowIndex].append(item)
+        updateLayoutRows(nextRows)
+    }
+
     func resetToDefaultLayout() {
         updateLayout { layout in
             layout.activeItems = TerminalAccessoryProfile.defaultActiveItems
+            layout.activeRows = TerminalAccessoryProfile.defaultActiveRows
         }
     }
 
@@ -215,6 +243,14 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     private func updateLayoutItems(_ items: [TerminalAccessoryItemRef]) {
         updateLayout { layout in
             layout.activeItems = items
+            layout.activeRows = TerminalAccessoryProfile.rows(fromLegacyActiveItems: items)
+        }
+    }
+
+    private func updateLayoutRows(_ rows: [[TerminalAccessoryItemRef]]) {
+        updateLayout { layout in
+            layout.activeRows = rows
+            layout.activeItems = rows.flatMap { $0 }
         }
     }
 

@@ -48,7 +48,7 @@ struct TerminalContainerView: View {
     @State private var voiceProcessing = false
     @State private var showingPermissionError = false
     @State private var permissionErrorMessage = ""
-    @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = true
+    @AppStorage("terminalVoiceButtonEnabled") private var voiceButtonEnabled = false
     #endif
 
     #if os(macOS)
