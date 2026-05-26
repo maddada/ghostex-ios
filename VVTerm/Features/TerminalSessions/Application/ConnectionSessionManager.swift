@@ -201,7 +201,13 @@ final class ConnectionSessionManager: ObservableObject {
     /// - Parameters:
     ///   - server: The server to connect to
     ///   - forceNew: If true, always creates a new tab even if one exists for this server
-    func openConnection(to server: Server, forceNew: Bool = false) async throws -> ConnectionSession {
+    func openConnection(
+        to server: Server,
+        forceNew: Bool = false,
+        startupCommand: String? = nil,
+        title: String? = nil,
+        skipTmuxLifecycle: Bool = false
+    ) async throws -> ConnectionSession {
         // Check if server is locked due to downgrade
         if ServerManager.shared.isServerLocked(server) {
             throw VVTermError.serverLocked(server.name)
@@ -219,8 +225,14 @@ final class ConnectionSessionManager: ObservableObject {
             throw VVTermError.authenticationFailed
         }
 
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-26-14:22:
+        Ghostex sidebar attach opens a normal VVTerm terminal session with a command supplied by the sidebar. Command-backed sessions must always create a fresh session and skip tmux startup so the remote Ghostex attach process owns the PTY from launch.
+        */
+        let commandBackedSession = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+
         // Check if already have a session for this server (unless forcing new)
-        if !forceNew, let existingSession = firstSession(for: server.id) {
+        if !forceNew, !commandBackedSession, let existingSession = firstSession(for: server.id) {
             selectedSessionId = existingSession.id
             return existingSession
         }
@@ -251,10 +263,12 @@ final class ConnectionSessionManager: ObservableObject {
         // Create new session - actual SSH connection happens in SSHTerminalWrapper
         let session = ConnectionSession(
             serverId: server.id,
-            title: server.name,
+            title: title ?? server.name,
             connectionState: .connecting,  // Will connect when terminal view appears
-            tmuxStatus: tmuxResolver.isTmuxEnabled(for: server.id) ? .unknown : .off,
-            workingDirectory: sourceWorkingDirectory
+            tmuxStatus: commandBackedSession || !tmuxResolver.isTmuxEnabled(for: server.id) ? .off : .unknown,
+            workingDirectory: sourceWorkingDirectory,
+            startupCommand: startupCommand,
+            skipTmuxLifecycle: skipTmuxLifecycle || commandBackedSession
         )
 
         sessions.append(session)
@@ -1049,6 +1063,8 @@ private struct ConnectionSessionsSnapshot: Codable {
         let autoReconnect: Bool
         let parentSessionId: UUID?
         let workingDirectory: String?
+        let startupCommand: String?
+        let skipTmuxLifecycle: Bool?
 
         init(from session: ConnectionSession) {
             self.id = session.id
@@ -1059,6 +1075,8 @@ private struct ConnectionSessionsSnapshot: Codable {
             self.autoReconnect = session.autoReconnect
             self.parentSessionId = session.parentSessionId
             self.workingDirectory = session.workingDirectory
+            self.startupCommand = session.startupCommand
+            self.skipTmuxLifecycle = session.skipTmuxLifecycle
         }
 
         func toSession() -> ConnectionSession {
@@ -1072,7 +1090,9 @@ private struct ConnectionSessionsSnapshot: Codable {
                 terminalSurfaceId: nil,
                 autoReconnect: autoReconnect,
                 workingDirectory: workingDirectory,
-                parentSessionId: parentSessionId
+                parentSessionId: parentSessionId,
+                startupCommand: startupCommand,
+                skipTmuxLifecycle: skipTmuxLifecycle ?? false
             )
         }
     }
@@ -1296,6 +1316,13 @@ extension ConnectionSessionManager {
         serverId: UUID,
         client: SSHClient
     ) async -> (command: String?, skipTmuxLifecycle: Bool) {
+        if let session = sessionWithID(sessionId),
+           let startupCommand = session.startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !startupCommand.isEmpty {
+            disableTmuxAttachment(for: sessionId, status: .off)
+            return (startupCommand, true)
+        }
+
         guard tmuxResolver.isTmuxEnabled(for: serverId) else {
             disableTmuxAttachment(for: sessionId, status: .off)
             return (nil, true)

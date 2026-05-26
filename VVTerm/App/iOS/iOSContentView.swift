@@ -153,10 +153,12 @@ struct iOSServerListView: View {
 
     @ObservedObject private var storeManager = StoreManager.shared
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @ObservedObject private var ghostexStore = GhostexSidebarStore.shared
     @State private var showingAddServer = false
     @State private var showingLocalDiscovery = false
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false
+    @State private var showingGhostexSidebar = false
     @State private var showingWorkspacePicker = false
     @State private var showingCreateEnvironment = false
     @State private var editingEnvironment: ServerEnvironment?
@@ -206,7 +208,13 @@ struct iOSServerListView: View {
                 workspaceToolbarButton
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    showingGhostexSidebar = true
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                }
+
                 Button {
                     presentAddServer()
                 } label: {
@@ -255,6 +263,19 @@ struct iOSServerListView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .modifier(AppearanceModifier())
+        }
+        .sheet(isPresented: $showingGhostexSidebar) {
+            /*
+            CDXC:iOSGhostexSidebar 2026-05-26-14:22:
+            The new VVTerm-based iOS app exposes Ghostex sessions from the server list instead of the old a-Shell keyboard accessory. This keeps sidebar navigation in SwiftUI and lets attach actions use VVTerm's existing terminal stack.
+            */
+            GhostexSidebarSheet(
+                serverManager: serverManager,
+                sessionManager: sessionManager,
+                store: ghostexStore,
+                onOpenTerminal: { showingTerminal = true }
+            )
+            .modifier(AppearanceModifier())
         }
         .sheet(isPresented: $showingWorkspacePicker) {
             NavigationStack {

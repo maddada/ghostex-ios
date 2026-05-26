@@ -57,6 +57,8 @@ struct ConnectionSession: Identifiable, Hashable {
     var moshFallbackReason: MoshFallbackReason?
     /// If set, this session is a split child of the parent session (not shown in tabs)
     var parentSessionId: UUID?
+    var startupCommand: String?
+    var skipTmuxLifecycle: Bool
 
     init(
         id: UUID = UUID(),
@@ -71,7 +73,9 @@ struct ConnectionSession: Identifiable, Hashable {
         workingDirectory: String? = nil,
         activeTransport: ShellTransport = .ssh,
         moshFallbackReason: MoshFallbackReason? = nil,
-        parentSessionId: UUID? = nil
+        parentSessionId: UUID? = nil,
+        startupCommand: String? = nil,
+        skipTmuxLifecycle: Bool = false
     ) {
         self.id = id
         self.serverId = serverId
@@ -86,6 +90,8 @@ struct ConnectionSession: Identifiable, Hashable {
         self.activeTransport = activeTransport
         self.moshFallbackReason = moshFallbackReason
         self.parentSessionId = parentSessionId
+        self.startupCommand = startupCommand
+        self.skipTmuxLifecycle = skipTmuxLifecycle
     }
 
     /// Whether this is a root tab session (not a split child)
