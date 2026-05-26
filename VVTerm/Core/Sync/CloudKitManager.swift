@@ -22,8 +22,8 @@ final class CloudKitManager: ObservableObject {
     @Published var isAvailable: Bool = false
     @Published var accountStatusDetail: String = String(localized: "Checking...")
 
-    private let container: CKContainer
-    private let database: CKDatabase
+    private let container: CKContainer?
+    private let database: CKDatabase?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
     private let recordZoneName = CloudKitSyncConstants.recordZoneName
     private lazy var recordZone = CKRecordZone(zoneName: recordZoneName)
@@ -64,11 +64,38 @@ final class CloudKitManager: ObservableObject {
     private var ensureZoneTask: Task<Void, Error>?
     private var zoneReady: Bool
 
+    private static func canUseCloudKitContainer(_ identifier: String) -> Bool {
+        if Bundle.main.object(forInfoDictionaryKey: "GhostexCloudKitDisabled") as? Bool == true {
+            return false
+        }
+        return true
+    }
+
+    private func requireDatabase() throws -> CKDatabase {
+        guard let database else {
+            throw CloudKitError.notConfigured
+        }
+        return database
+    }
+
     private init() {
-        container = CKContainer(identifier: CloudKitSyncConstants.cloudKitContainerIdentifier)
-        database = container.privateCloudDatabase
-        zoneReady = UserDefaults.standard.bool(forKey: CloudKitSyncConstants.zoneReadyKey(for: recordZoneName))
-        Task { await checkAccountStatus() }
+        /*
+        CDXC:iOSDeviceInstall 2026-05-26-14:44:
+        Local Ghostex device builds can be signed without Vivy's iCloud container entitlement. Check the entitlement before constructing CKContainer because CloudKit traps on physical iOS devices when the requested container is not present in the signed app.
+        */
+        let containerIdentifier = CloudKitSyncConstants.cloudKitContainerIdentifier
+        if Self.canUseCloudKitContainer(containerIdentifier) {
+            let cloudContainer = CKContainer(identifier: containerIdentifier)
+            container = cloudContainer
+            database = cloudContainer.privateCloudDatabase
+            zoneReady = UserDefaults.standard.bool(forKey: CloudKitSyncConstants.zoneReadyKey(for: recordZoneName))
+            Task { await checkAccountStatus() }
+        } else {
+            container = nil
+            database = nil
+            zoneReady = false
+            applySyncDisabledState(reason: String(localized: "iCloud entitlement unavailable"))
+        }
     }
 
     // MARK: - Account Status
@@ -80,6 +107,11 @@ final class CloudKitManager: ObservableObject {
             accountStatusChecked = true
             return
         }
+        guard container != nil, database != nil else {
+            applySyncDisabledState(reason: String(localized: "iCloud entitlement unavailable"))
+            accountStatusChecked = true
+            return
+        }
         // Re-check when unavailable so transient account/network states can recover
         guard !accountStatusChecked || !isAvailable else { return }
         await checkAccountStatus()
@@ -88,6 +120,11 @@ final class CloudKitManager: ObservableObject {
     private func checkAccountStatus() async {
         guard isSyncEnabled else {
             applySyncDisabledState()
+            accountStatusChecked = true
+            return
+        }
+        guard let container else {
+            applySyncDisabledState(reason: String(localized: "iCloud entitlement unavailable"))
             accountStatusChecked = true
             return
         }
@@ -111,7 +148,7 @@ final class CloudKitManager: ObservableObject {
             }
 
             logger.info("CloudKit account status: \(statusDescription)")
-            logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
+            logger.info("Container identifier: \(self.container?.containerIdentifier ?? "nil")")
 
             isAvailable = status == .available
             accountStatusDetail = statusDescription
@@ -133,10 +170,10 @@ final class CloudKitManager: ObservableObject {
         }
     }
 
-    private func applySyncDisabledState() {
+    private func applySyncDisabledState(reason: String = String(localized: "Disabled")) {
         isAvailable = false
         syncStatus = .disabled
-        accountStatusDetail = String(localized: "Disabled")
+        accountStatusDetail = reason
     }
 
     func handleSyncToggle(_ enabled: Bool) {
@@ -294,6 +331,7 @@ final class CloudKitManager: ObservableObject {
             successLog: "Deleted server \(server.name) from CloudKit",
             failureLog: "Failed to delete server"
         ) {
+            let database = try requireDatabase()
             _ = try await withZoneRetry {
                 try await database.modifyRecords(saving: [], deleting: [recordID])
             }
@@ -322,6 +360,7 @@ final class CloudKitManager: ObservableObject {
             successLog: "Deleted workspace \(workspace.name) from CloudKit",
             failureLog: "Failed to delete workspace"
         ) {
+            let database = try requireDatabase()
             _ = try await withZoneRetry {
                 try await database.modifyRecords(saving: [], deleting: [recordID])
             }
@@ -366,6 +405,7 @@ final class CloudKitManager: ObservableObject {
         let recordID = CKRecord.ID(recordName: TerminalThemePreference.recordName, zoneID: recordZoneID)
 
         do {
+            let database = try requireDatabase()
             let record = try await withZoneRetry {
                 try await database.record(for: recordID)
             }
@@ -402,6 +442,7 @@ final class CloudKitManager: ObservableObject {
         let recordID = terminalAccessoryRecordID()
 
         do {
+            let database = try requireDatabase()
             let record = try await withZoneRetry {
                 try await database.record(for: recordID)
             }
@@ -441,6 +482,7 @@ final class CloudKitManager: ObservableObject {
 
         var baseRecord: CKRecord?
         var mergedProfile = normalizedLocal
+        let database = try requireDatabase()
 
         do {
             let remoteRecord = try await withZoneRetry {
@@ -542,6 +584,7 @@ final class CloudKitManager: ObservableObject {
     func subscribeToChanges() async {
         await ensureAccountStatusChecked()
         guard isSyncEnabled, isAvailable else { return }
+        guard let database else { return }
 
         let subscriptionID = CloudKitSyncConstants.databaseSubscriptionID
 
@@ -635,6 +678,7 @@ final class CloudKitManager: ObservableObject {
         previousToken: CKServerChangeToken?
     ) async throws -> ZoneChangeBatch {
         let logger = logger
+        let database = try requireDatabase()
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ZoneChangeBatch, Error>) in
             let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
                 previousServerChangeToken: previousToken,
@@ -698,7 +742,7 @@ final class CloudKitManager: ObservableObject {
                 }
             }
 
-            self.database.add(operation)
+            database.add(operation)
         }
     }
 
@@ -797,6 +841,7 @@ final class CloudKitManager: ObservableObject {
         _ record: CKRecord,
         savePolicy: CKModifyRecordsOperation.RecordSavePolicy
     ) async throws {
+        let database = try requireDatabase()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
             operation.savePolicy = savePolicy
@@ -852,6 +897,7 @@ final class CloudKitManager: ObservableObject {
 
         // Batch delete
         if !recordIDs.isEmpty {
+            let database = try requireDatabase()
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: recordIDs)
                 operation.qualityOfService = .userInitiated
@@ -865,7 +911,7 @@ final class CloudKitManager: ObservableObject {
                     }
                 }
 
-                self.database.add(operation)
+                database.add(operation)
             }
         }
 
@@ -918,6 +964,7 @@ final class CloudKitManager: ObservableObject {
     }
 
     private func createZoneIfNeeded() async throws {
+        let database = try requireDatabase()
         let results = try await database.recordZones(for: [recordZoneID])
         if let result = results[recordZoneID] {
             switch result {
@@ -970,6 +1017,7 @@ final class CloudKitManager: ObservableObject {
 
 enum CloudKitError: LocalizedError {
     case notAvailable
+    case notConfigured
     case recordNotFound
     case encodingFailed
     case decodingFailed
@@ -977,6 +1025,7 @@ enum CloudKitError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAvailable: return "iCloud is not available"
+        case .notConfigured: return "iCloud is not configured for this app build"
         case .recordNotFound: return "Record not found"
         case .encodingFailed: return "Failed to encode data"
         case .decodingFailed: return "Failed to decode data"

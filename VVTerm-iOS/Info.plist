@@ -4,8 +4,12 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>VVTerm</string>
+		<!-- CDXC:iOSBranding 2026-05-26-14:44: Device installs of the VVTerm-based fork should appear as Ghostex on iOS so testers can distinguish the migrated app from upstream VVTerm. -->
+		<key>CFBundleDisplayName</key>
+		<string>Ghostex</string>
+		<!-- CDXC:iOSDeviceInstall 2026-05-26-14:44: The locally signed Ghostex iOS fork does not carry Vivy's iCloud container entitlement. Disable CloudKit startup for this app identity instead of constructing an unavailable CKContainer and crashing on physical devices. -->
+		<key>GhostexCloudKitDisabled</key>
+		<true/>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
