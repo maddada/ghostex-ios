@@ -25,7 +25,8 @@
         <key>NSExtensionAttributes</key>
         <dict>
             <key>NSExtensionWidgetKind</key>
-            <string>app.vivy.VivyTerm.liveactivity</string>
+            <!-- CDXC:iOSTestFlight 2026-05-28-21:45: The production iOS extension must identify as the Ghostex Live Activity extension so TestFlight provisioning and host-extension matching use the Ghostex bundle namespace. -->
+            <string>com.maddada.ghostex.ios.liveactivity</string>
             <key>NSSupportsLiveActivities</key>
             <true/>
         </dict>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CDXC:iOSTestFlight 2026-05-28-21:45:
+Production TestFlight builds must use the Ghostex App Store identity instead of upstream VVTerm capabilities.
+Keep release entitlements intentionally empty until Ghostex-specific iCloud, push, keychain, or app-group services are provisioned in Apple Developer.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict/>
+</plist>
