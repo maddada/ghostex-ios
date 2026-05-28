@@ -4008,13 +4008,11 @@ private class TerminalInputAccessoryView: UIInputView {
 
     private func updateInterfaceStyle(for backgroundColor: UIColor) {
         if #available(iOS 13.0, *) {
-            let resolved = backgroundColor.resolvedColor(with: traitCollection)
-            if let isDark = isDarkBackgroundColor(resolved) {
-                overrideUserInterfaceStyle = isDark ? .dark : .light
-            } else {
-                let style = window?.traitCollection.userInterfaceStyle ?? traitCollection.userInterfaceStyle
-                overrideUserInterfaceStyle = style == .unspecified ? .unspecified : style
-            }
+            /*
+            CDXC:iOSTerminalAppearance 2026-05-28-21:05:
+            Ghostex iOS is dark-only for now. Keep the terminal host dark even if a selected theme resolves to a light background so UIKit text input, selection handles, and accessory surfaces do not flip back to light mode.
+            */
+            overrideUserInterfaceStyle = .dark
         }
     }
 

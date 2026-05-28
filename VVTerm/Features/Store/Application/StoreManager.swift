@@ -9,9 +9,14 @@ import os.log
 final class StoreManager: ObservableObject {
     static let shared = StoreManager()
     static let reviewModeCode = ReviewModeCode.value
+    /*
+    CDXC:iOSStoreEntitlements 2026-05-28-21:05:
+    The Ghostex iOS fork should expose Pro-version behavior during local testing. Force the entitlement booleans on centrally so existing feature gates open without scattering temporary bypass logic through server, tab, split-pane, and file-browser workflows.
+    */
+    private static let forceProFeaturesEnabled = true
 
-    @Published var isPro: Bool = false
-    @Published var isLifetime: Bool = false
+    @Published var isPro: Bool = StoreManager.forceProFeaturesEnabled
+    @Published var isLifetime: Bool = StoreManager.forceProFeaturesEnabled
     @Published var subscriptionStatus: Product.SubscriptionInfo.Status?
     @Published var products: [Product] = []
     @Published var purchaseState: PurchaseState = .idle
@@ -44,7 +49,9 @@ final class StoreManager: ObservableObject {
     private init() {
         updateListenerTask = listenForTransactions()
         Task {
-            await loadProducts()
+            if !Self.forceProFeaturesEnabled {
+                await loadProducts()
+            }
             await checkEntitlements()
         }
     }
@@ -121,6 +128,11 @@ final class StoreManager: ObservableObject {
     // MARK: - Check Entitlements
 
     func checkEntitlements() async {
+        guard !Self.forceProFeaturesEnabled else {
+            applyForcedProEntitlements()
+            return
+        }
+
         refreshReviewModeState()
         var hasAccess = false
         var hasLifetime = false
@@ -237,6 +249,13 @@ final class StoreManager: ObservableObject {
         }
     }
 
+    private func applyForcedProEntitlements() {
+        isPro = true
+        isLifetime = true
+        subscriptionStatus = nil
+        logger.info("Entitlements forced for local Ghostex iOS build")
+    }
+
     private func scheduleReviewModeExpiry() {
         reviewModeExpiryTask?.cancel()
         guard let expiresAt = reviewModeExpiresAt else { return }
@@ -277,6 +296,11 @@ final class StoreManager: ObservableObject {
         hasLifetime: Bool,
         status: Product.SubscriptionInfo.Status?
     ) {
+        guard !Self.forceProFeaturesEnabled else {
+            applyForcedProEntitlements()
+            return
+        }
+
         isPro = hasAccess || isReviewModeEnabled
         isLifetime = hasLifetime
         subscriptionStatus = status

@@ -36,32 +36,18 @@ enum AppearanceMode: String, CaseIterable {
 
 /// View modifier that applies the app-wide appearance setting
 struct AppearanceModifier: ViewModifier {
-    @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
-
-    private var colorScheme: ColorScheme? {
-        switch AppearanceMode(rawValue: appearanceMode) ?? .system {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
-    }
-
     func body(content: Content) -> some View {
-        let mode = AppearanceMode(rawValue: appearanceMode) ?? .system
-        #if os(iOS)
+        /*
+        CDXC:iOSAppShell 2026-05-28-21:05:
+        The Ghostex iOS app should always render in dark mode while the local fork is being tested. Ignore the saved appearance preference at the root so every SwiftUI scene, UIKit host, and terminal container receives a dark color scheme.
+        */
+        let mode = AppearanceMode.dark
         content
+            .preferredColorScheme(.dark)
             .background(
                 AppearanceWindowBridge(mode: mode)
                     .frame(width: 0, height: 0)
             )
-        #else
-        content
-            .preferredColorScheme(mode.colorScheme)
-            .background(
-                AppearanceWindowBridge(mode: mode)
-                    .frame(width: 0, height: 0)
-            )
-        #endif
     }
 }
 
