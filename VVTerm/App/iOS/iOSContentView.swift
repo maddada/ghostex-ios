@@ -153,12 +153,10 @@ struct iOSServerListView: View {
 
     @ObservedObject private var storeManager = StoreManager.shared
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
-    @ObservedObject private var ghostexStore = GhostexSidebarStore.shared
     @State private var showingAddServer = false
     @State private var showingLocalDiscovery = false
     @State private var showingAddWorkspace = false
     @State private var showingSettings = false
-    @State private var showingGhostexSidebar = false
     @State private var showingWorkspacePicker = false
     @State private var showingCreateEnvironment = false
     @State private var editingEnvironment: ServerEnvironment?
@@ -171,7 +169,6 @@ struct iOSServerListView: View {
     @State private var showingCustomEnvironmentAlert = false
     @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
-    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
     private var canAddServer: Bool {
         !serverManager.workspaces.isEmpty
@@ -209,12 +206,6 @@ struct iOSServerListView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    showingGhostexSidebar = true
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                }
-
                 Button {
                     presentAddServer()
                 } label: {
@@ -263,19 +254,6 @@ struct iOSServerListView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .modifier(AppearanceModifier())
-        }
-        .sheet(isPresented: $showingGhostexSidebar) {
-            /*
-            CDXC:iOSGhostexSidebar 2026-05-26-14:22:
-            The new VVTerm-based iOS app exposes Ghostex sessions from the server list instead of the old a-Shell keyboard accessory. This keeps sidebar navigation in SwiftUI and lets attach actions use VVTerm's existing terminal stack.
-            */
-            GhostexSidebarSheet(
-                serverManager: serverManager,
-                sessionManager: sessionManager,
-                store: ghostexStore,
-                onOpenTerminal: { showingTerminal = true }
-            )
-            .modifier(AppearanceModifier())
         }
         .sheet(isPresented: $showingWorkspacePicker) {
             NavigationStack {
@@ -775,6 +753,7 @@ struct iOSTerminalView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @ObservedObject private var ghostexStore = GhostexSidebarStore.shared
 
     /// Delayed flag to allow tab animation to complete before creating terminal
     @State private var shouldShowTerminalBySession: [UUID: Bool] = [:]
@@ -788,6 +767,7 @@ struct iOSTerminalView: View {
     @State private var currentServerId: UUID?
     @State private var pendingCloseSession: ConnectionSession?
     @State private var showingZenPanel = false
+    @State private var showingGhostexSidebar = false
     @State private var requestedTerminalDismissal = false
     @State private var voiceRecordingBySession: [UUID: Bool] = [:]
     @State private var pendingVoiceReturnBySession: [UUID: Bool] = [:]
@@ -1178,6 +1158,21 @@ struct iOSTerminalView: View {
                 SettingsView()
                     .modifier(AppearanceModifier())
             }
+            .sheet(isPresented: $showingGhostexSidebar) {
+                /*
+                CDXC:iOSGhostexSidebar 2026-05-28-21:32:
+                The Ghostex sessions entry point belongs beside the terminal view switcher controls, after the Files segment, instead of on the server list. This keeps session attach/reuse available while a terminal is open and preserves the existing Ghostex sheet workflow.
+                */
+                GhostexSidebarSheet(
+                    serverManager: serverManager,
+                    sessionManager: sessionManager,
+                    store: ghostexStore,
+                    onOpenTerminal: {
+                        currentServerId = sessionManager.selectedSession?.serverId ?? currentServerId
+                    }
+                )
+                .modifier(AppearanceModifier())
+            }
             .sheet(item: $serverToEdit) { server in
                 NavigationStack {
                     ServerFormSheet(
@@ -1356,7 +1351,13 @@ struct iOSTerminalView: View {
             if let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id {
                 iOSNativeSegmentedPicker(
                     selection: selectedViewBinding(for: serverId),
-                    tabs: viewTabConfig.currentVisibleTabs
+                    tabs: viewTabConfig.currentVisibleTabs,
+                    trailingActionSystemImage: "robot",
+                    trailingActionFallbackSystemImage: "cpu",
+                    trailingActionAccessibilityLabel: "Ghostex Sessions",
+                    onTrailingAction: {
+                        showingGhostexSidebar = true
+                    }
                 )
                 .fixedSize()
             }
@@ -2009,10 +2010,14 @@ struct iOSTerminalView: View {
 private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     @Binding var selection: String
     let tabs: [ConnectionViewTab]
+    var trailingActionSystemImage: String?
+    var trailingActionFallbackSystemImage: String?
+    var trailingActionAccessibilityLabel: String?
+    var onTrailingAction: (() -> Void)?
 
     func makeUIView(context: Context) -> UISegmentedControl {
         let control = UISegmentedControl()
-        configure(control, tabs: tabs)
+        configure(control, tabs: tabs, trailingActionSystemImage: trailingActionSystemImage, trailingActionFallbackSystemImage: trailingActionFallbackSystemImage)
         control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
         control.selectedSegmentIndex = selectedIndex
         control.apportionsSegmentWidthsByContent = true
@@ -2024,9 +2029,14 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     func updateUIView(_ uiView: UISegmentedControl, context: Context) {
         context.coordinator.selection = $selection
         context.coordinator.tabs = tabs
-        if context.coordinator.renderedTabs != tabs {
-            configure(uiView, tabs: tabs)
+        context.coordinator.onTrailingAction = onTrailingAction
+        if context.coordinator.renderedTabs != tabs ||
+            context.coordinator.renderedTrailingActionSystemImage != trailingActionSystemImage ||
+            context.coordinator.renderedTrailingActionFallbackSystemImage != trailingActionFallbackSystemImage {
+            configure(control: uiView)
             context.coordinator.renderedTabs = tabs
+            context.coordinator.renderedTrailingActionSystemImage = trailingActionSystemImage
+            context.coordinator.renderedTrailingActionFallbackSystemImage = trailingActionFallbackSystemImage
         }
 
         let resolvedSelection = tabs.contains(where: { $0.id == selection }) ? selection : tabs.first?.id ?? selection
@@ -2057,27 +2067,58 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
         tabs.firstIndex(where: { $0.id == selection }) ?? 0
     }
 
-    private func configure(_ control: UISegmentedControl, tabs: [ConnectionViewTab]) {
+    private func configure(control: UISegmentedControl) {
+        configure(control, tabs: tabs, trailingActionSystemImage: trailingActionSystemImage, trailingActionFallbackSystemImage: trailingActionFallbackSystemImage)
+    }
+
+    private func configure(
+        _ control: UISegmentedControl,
+        tabs: [ConnectionViewTab],
+        trailingActionSystemImage: String?,
+        trailingActionFallbackSystemImage: String?
+    ) {
         control.removeAllSegments()
         for (index, tab) in tabs.enumerated() {
             control.insertSegment(with: UIImage(systemName: tab.icon), at: index, animated: false)
         }
-        control.accessibilityLabel = tabs.map(\.localizedKey).joined(separator: ", ")
+        if let trailingActionSystemImage {
+            let actionImage = UIImage(systemName: trailingActionSystemImage)
+                ?? trailingActionFallbackSystemImage.flatMap { UIImage(systemName: $0) }
+            control.insertSegment(with: actionImage, at: tabs.count, animated: false)
+            control.setWidth(38, forSegmentAt: tabs.count)
+        }
+        control.accessibilityLabel = (tabs.map(\.localizedKey) + [trailingActionAccessibilityLabel].compactMap { $0 }).joined(separator: ", ")
     }
 
     final class Coordinator: NSObject {
         var selection: Binding<String>
         var tabs: [ConnectionViewTab]
         var renderedTabs: [ConnectionViewTab]
+        var renderedTrailingActionSystemImage: String?
+        var renderedTrailingActionFallbackSystemImage: String?
+        var onTrailingAction: (() -> Void)?
 
-        init(selection: Binding<String>, tabs: [ConnectionViewTab]) {
+        init(selection: Binding<String>, tabs: [ConnectionViewTab], onTrailingAction: (() -> Void)? = nil) {
             self.selection = selection
             self.tabs = tabs
             self.renderedTabs = tabs
+            self.onTrailingAction = onTrailingAction
         }
 
         @objc func valueChanged(_ sender: UISegmentedControl) {
             let index = sender.selectedSegmentIndex
+            if index == tabs.count, let onTrailingAction {
+                let selectedIndex = tabs.firstIndex(where: { $0.id == selection.wrappedValue }) ?? 0
+                UIView.performWithoutAnimation {
+                    sender.selectedSegmentIndex = selectedIndex
+                    sender.setNeedsLayout()
+                }
+                DispatchQueue.main.async {
+                    onTrailingAction()
+                }
+                return
+            }
+
             guard tabs.indices.contains(index) else { return }
             let selectedTabID = tabs[index].id
             guard selection.wrappedValue != selectedTabID else { return }

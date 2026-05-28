@@ -7,7 +7,7 @@ struct GhostexSidebarTests {
     func parseSessionsAllowsLeadingCommandNoise() throws {
         let output = """
         warning: shell initialized
-        {"ok":true,"sessions":[{"sessionId":"s1","alias":"A","title":"Build","projectId":"p1","projectName":"App","projectPath":"/repo/app","status":"working","agent":"codex","agentIcon":"codex","providerSessionName":"zmx-a","attachCommand":"ghostex attach --session-id s1","isFocused":true}]}
+        {"ok":true,"sessions":[{"sessionId":"s1","alias":"A","title":"Build","projectId":"p1","projectName":"App","projectPath":"/repo/app","status":"working","provider":"zmx","agent":"codex","agentIcon":"codex","providerSessionName":"zmx-a","attachCommand":"ghostex attach --session-id s1","isFocused":true}]}
         """
 
         let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
@@ -22,9 +22,9 @@ struct GhostexSidebarTests {
     func groupsSessionsByProjectContract() throws {
         let output = """
         {"sessions":[
-          {"sessionId":"s1","projectId":"p1","projectName":"App","status":"working"},
-          {"sessionId":"s2","projectId":"p1","projectName":"App","status":"sleep"},
-          {"sessionId":"s3","projectPath":"/repo/ops","projectName":"Ops","status":"attention"}
+          {"sessionId":"s1","projectId":"p1","projectName":"App","status":"working","provider":"zmx"},
+          {"sessionId":"s2","projectId":"p1","projectName":"App","status":"sleep","provider":"zmx"},
+          {"sessionId":"s3","projectPath":"/repo/ops","projectName":"Ops","status":"attention","provider":"zmx"}
         ]}
         """
 
@@ -51,11 +51,83 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func parseSessionsFiltersNonZmxProviders() throws {
+        let output = """
+        {"sessions":[
+          {"sessionId":"z1","provider":"zmx","projectName":"App"},
+          {"sessionId":"t1","provider":"tmux","projectName":"App"},
+          {"sessionId":"o1","sessionPersistenceProvider":"off","projectName":"App"}
+        ]}
+        """
+
+        let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
+
+        #expect(sessions.map(\.sessionId) == ["z1"])
+    }
+
+    @Test
+    func zmxViewportRefreshSequenceMatchesAndroidContract() {
+        #expect(GhostexZmxViewportRefresh.sequence == "\u{001B}]1337;ZMX_REFRESH\u{0007}")
+    }
+
+    @Test
+    func parseSessionsScansPastBraceNoise() throws {
+        let output = """
+        profile loaded {not json}
+        warning {still not json
+        {"ok":true,"sessions":[{"sessionId":"s1","provider":"zmx","status":"needs_attention"}]}
+        """
+
+        let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
+
+        #expect(sessions.count == 1)
+        #expect(sessions[0].displayStatus == "attention")
+    }
+
+    @Test
+    func createSessionCommandRequestsJson() {
+        let project = GhostexProjectGroup(
+            key: "p1",
+            projectId: "p1",
+            groupId: "g1",
+            name: "App",
+            path: "/repo/app",
+            sessions: []
+        )
+
+        let command = GhostexRemoteCommand.createSession(project: project)
+
+        #expect(command.contains("ghostex create-session --json"))
+        #expect(command.contains("--project-id"))
+        #expect(command.contains("--group-id"))
+    }
+
+    @Test
+    func createSessionResultParsesCreatedSessionId() {
+        let output = """
+        shell notice
+        {"ok":true,"session":{"sessionId":"created-123"}}
+        """
+
+        #expect(GhostexCreateSessionResult.createdSessionId(from: output) == "created-123")
+    }
+
+    @Test
+    func createSessionResultPrefersGhostexListIdentity() {
+        let output = """
+        {"ok":true,"session":{"ghostexId":"combined-session:project-1:g-1","sessionId":"g-1"}}
+        """
+
+        #expect(GhostexCreateSessionResult.createdSessionId(from: output) == "combined-session:project-1:g-1")
+    }
+
+    @Test
     func loginShellCommandQuotesNestedArguments() {
         let command = GhostexRemoteCommand.renameSession(
             GhostexRemoteSession(json: [
                 "sessionId": "abc'123",
                 "title": "Old",
+                "provider": "zmx",
             ])!,
             title: "Bob's Session"
         )

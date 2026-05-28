@@ -20,6 +20,7 @@ final class GhostexSidebarStore: ObservableObject {
     private let maxLogEntries = 80
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "GhostexSidebar")
     private var refreshTask: Task<Void, Never>?
+    private var pollTask: Task<Void, Never>?
 
     var projectGroups: [GhostexProjectGroup] {
         GhostexProjectGroup.groups(from: sessions)
@@ -64,17 +65,47 @@ final class GhostexSidebarStore: ObservableObject {
         /*
         CDXC:iOSGhostexSidebar 2026-05-26-14:22:
         Sidebar attach must open through VVTerm's existing terminal/session lifecycle. Create a normal VVTerm SSH session with a Ghostex startup command instead of porting the old a-Shell direct libssh2 terminal bridge.
+
+        CDXC:iOSGhostexSidebar 2026-05-28-17:43:
+        Reopening the same Ghostex ZMX session from the iOS sidebar should select the existing VVTerm attach tab when it is still live instead of creating duplicate SSH attach terminals. This ports Android's warm-session switching intent while staying inside VVTerm's tab/session ownership model.
+
+        CDXC:iOSGhostexSidebar 2026-05-28-20:59:
+        ZMX-backed mobile attaches need the same delayed viewport refresh as Android sidebar and notification taps so the remote ZMX client repaints with the VVTerm grid after the tab becomes current.
         */
+        let startupCommand = GhostexRemoteCommand.attach(sessionId: session.sessionId)
+        if let existingSession = sessionManager.sessions.first(where: {
+            $0.serverId == server.id &&
+                $0.startupCommand == startupCommand &&
+                ($0.connectionState.isConnected || $0.connectionState.isConnecting)
+        }) {
+            appendLog("Reusing Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
+            sessionManager.selectedSessionId = existingSession.id
+            sessionManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
+            scheduleViewportRefreshIfNeeded(
+                for: session,
+                localSessionId: existingSession.id,
+                sessionManager: sessionManager,
+                reason: "ghostex-warm-session-reuse"
+            )
+            return
+        }
+
         appendLog("Opening Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
         let attachSession = try await sessionManager.openConnection(
             to: server,
             forceNew: true,
-            startupCommand: GhostexRemoteCommand.attach(sessionId: session.sessionId),
+            startupCommand: startupCommand,
             title: session.title,
             skipTmuxLifecycle: true
         )
         sessionManager.selectedSessionId = attachSession.id
         sessionManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
+        scheduleViewportRefreshIfNeeded(
+            for: session,
+            localSessionId: attachSession.id,
+            sessionManager: sessionManager,
+            reason: "ghostex-new-ssh-attach"
+        )
     }
 
     func runSessionAction(
@@ -101,13 +132,41 @@ final class GhostexSidebarStore: ObservableObject {
         }
     }
 
-    func createSession(in project: GhostexProjectGroup, using serverManager: ServerManager) {
-        runRemote(
-            GhostexRemoteCommand.createSession(project: project),
-            description: "create session in \(project.name)",
-            refreshAfter: true,
-            using: serverManager
-        )
+    func createSession(
+        in project: GhostexProjectGroup,
+        using serverManager: ServerManager,
+        sessionManager: ConnectionSessionManager
+    ) async throws {
+        guard let server = selectedServer(from: serverManager.servers) else {
+            throw GhostexError("Select a Ghostex host before creating a session.")
+        }
+
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-28-17:43:
+        Creating a project session from mobile should match Android and macOS behavior: ask the Mac app to create the ZMX-backed terminal, refresh the sidebar inventory, then attach the new session immediately when the CLI returns a stable session id.
+        */
+        isRunningAction = true
+        lastError = nil
+        appendLog("Running Ghostex action: create session in \(project.name).")
+        do {
+            let output = try await execute(GhostexRemoteCommand.createSession(project: project), on: server)
+            appendLog("Action finished: create session in \(project.name).")
+            await loadSessions(using: serverManager)
+
+            guard let createdSessionId = GhostexCreateSessionResult.createdSessionId(from: output) else {
+                throw GhostexError("Ghostex created the session but did not return its session id.")
+            }
+            guard let createdSession = sessions.first(where: { $0.sessionId == createdSessionId }) else {
+                throw GhostexError("Ghostex created the session, but it was not present after refresh.")
+            }
+            try await attach(createdSession, using: serverManager, sessionManager: sessionManager)
+            isRunningAction = false
+        } catch {
+            isRunningAction = false
+            lastError = error.localizedDescription
+            appendLog("Action failed: create session in \(project.name): \(error.localizedDescription)")
+            throw error
+        }
     }
 
     func moveProject(_ project: GhostexProjectGroup, direction: String, using serverManager: ServerManager) {
@@ -150,6 +209,23 @@ final class GhostexSidebarStore: ObservableObject {
     func reportError(_ error: Error) {
         lastError = error.localizedDescription
         appendLog("Error: \(error.localizedDescription)")
+    }
+
+    func startPolling(using serverManager: ServerManager) {
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if self?.selectedServer(from: serverManager.servers) != nil {
+                    await self?.loadSessions(using: serverManager)
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
     }
 
     private func loadSessions(using serverManager: ServerManager) async {
@@ -248,6 +324,20 @@ final class GhostexSidebarStore: ObservableObject {
         ) { client in
             try await client.execute(command, timeout: .seconds(20))
         }
+    }
+
+    private func scheduleViewportRefreshIfNeeded(
+        for remoteSession: GhostexRemoteSession,
+        localSessionId: UUID,
+        sessionManager: ConnectionSessionManager,
+        reason: String
+    ) {
+        guard remoteSession.isZmxBacked else { return }
+        sessionManager.scheduleTerminalViewportRefreshAfterSessionSwitch(
+            sessionId: localSessionId,
+            redrawSequence: GhostexZmxViewportRefresh.sequence,
+            reason: reason
+        )
     }
 
     private func appendLog(_ message: String) {

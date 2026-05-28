@@ -87,9 +87,10 @@ struct GhostexSidebarSheet: View {
                 }
             }
             .onAppear {
-                if store.sessions.isEmpty, selectedServer != nil {
-                    store.refresh(using: serverManager)
-                }
+                store.startPolling(using: serverManager)
+            }
+            .onDisappear {
+                store.stopPolling()
             }
             .refreshable {
                 store.refresh(using: serverManager)
@@ -213,7 +214,7 @@ struct GhostexSidebarSheet: View {
                         project: project,
                         canMoveUp: index > 0,
                         canMoveDown: index < store.projectGroups.count - 1,
-                        onCreate: { store.createSession(in: project, using: serverManager) },
+                        onCreate: { createAndAttachSession(in: project) },
                         onRefresh: { store.refresh(using: serverManager) },
                         onMoveUp: { store.moveProject(project, direction: "up", using: serverManager) },
                         onMoveDown: { store.moveProject(project, direction: "down", using: serverManager) },
@@ -300,6 +301,18 @@ struct GhostexSidebarSheet: View {
         Task {
             do {
                 try await store.attach(session, using: serverManager, sessionManager: sessionManager)
+                dismiss()
+                onOpenTerminal()
+            } catch {
+                store.reportError(error)
+            }
+        }
+    }
+
+    private func createAndAttachSession(in project: GhostexProjectGroup) {
+        Task {
+            do {
+                try await store.createSession(in: project, using: serverManager, sessionManager: sessionManager)
                 dismiss()
                 onOpenTerminal()
             } catch {

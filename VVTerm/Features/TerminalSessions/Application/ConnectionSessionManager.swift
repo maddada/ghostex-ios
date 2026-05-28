@@ -98,6 +98,9 @@ final class ConnectionSessionManager: ObservableObject {
     private var persistTask: Task<Void, Never>?
     private var isRestoring = false
 
+    private let terminalViewportRefreshDelay: Duration = .milliseconds(250)
+    private let terminalViewportRefreshMaxAttempts = 6
+
     private init() {
         restoreSnapshot()
     }
@@ -907,6 +910,94 @@ final class ConnectionSessionManager: ObservableObject {
     func sendText(_ text: String, to sessionId: UUID) {
         guard let terminal = terminalViews[sessionId] else { return }
         terminal.sendText(text)
+    }
+
+    func scheduleTerminalViewportRefreshAfterSessionSwitch(
+        sessionId: UUID,
+        redrawSequence: String?,
+        reason: String
+    ) {
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-28-20:57:
+        Mobile Ghostex attaches can inherit stale remote ZMX dimensions after the tab switch. Match Android's attach refresh by waiting for the selected VVTerm surface and SSH shell, forcing the local Ghostty size/redraw, resizing the remote PTY, then letting the caller send a provider-specific redraw sequence.
+        */
+        scheduleTerminalViewportRefreshAfterSessionSwitch(
+            sessionId: sessionId,
+            redrawSequence: redrawSequence,
+            reason: reason,
+            attempt: 1
+        )
+    }
+
+    private func scheduleTerminalViewportRefreshAfterSessionSwitch(
+        sessionId: UUID,
+        redrawSequence: String?,
+        reason: String,
+        attempt: Int
+    ) {
+        let delay = terminalViewportRefreshDelay
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            await self?.refreshTerminalViewportAfterSessionSwitch(
+                sessionId: sessionId,
+                redrawSequence: redrawSequence,
+                reason: reason,
+                attempt: attempt
+            )
+        }
+    }
+
+    private func refreshTerminalViewportAfterSessionSwitch(
+        sessionId: UUID,
+        redrawSequence: String?,
+        reason: String,
+        attempt: Int
+    ) {
+        guard let session = sessionWithID(sessionId) else { return }
+        guard selectedSessionId == sessionId else { return }
+
+        guard let terminal = terminalViews[sessionId],
+              terminal.window != nil,
+              let client = sshClient(for: session),
+              let shellId = shellId(for: session) else {
+            if attempt < terminalViewportRefreshMaxAttempts {
+                scheduleTerminalViewportRefreshAfterSessionSwitch(
+                    sessionId: sessionId,
+                    redrawSequence: redrawSequence,
+                    reason: reason,
+                    attempt: attempt + 1
+                )
+            } else {
+                logger.warning("Terminal viewport refresh skipped for \(sessionId.uuidString, privacy: .public): \(reason, privacy: .public)")
+            }
+            return
+        }
+
+        terminal.resumeRendering()
+        #if os(iOS)
+        if terminal.bounds.width > 0, terminal.bounds.height > 0 {
+            terminal.sizeDidChange(terminal.bounds.size)
+        }
+        #endif
+        terminal.forceRefresh()
+
+        guard let size = terminal.terminalSize() else { return }
+        let cols = Int(size.columns)
+        let rows = Int(size.rows)
+        guard cols > 0, rows > 0 else { return }
+        let redrawData = redrawSequence?.data(using: .utf8)
+        let logger = logger
+
+        Task {
+            do {
+                try await client.resize(cols: cols, rows: rows, for: shellId)
+                if let redrawData {
+                    try await client.write(redrawData, to: shellId)
+                }
+            } catch {
+                logger.warning("Terminal viewport refresh failed for \(sessionId.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     // MARK: - Reconnection

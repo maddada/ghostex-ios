@@ -8,28 +8,37 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let groupId: String
     let projectName: String
     let projectPath: String
+    let activity: String
     let status: String
+    let provider: String
     let agent: String
     let agentIcon: String
     let providerSessionName: String
     let attachCommand: String
     let resumeCommand: String
     let isFocused: Bool
+    let isSleeping: Bool
     let lastInteractionAt: String
 
     var id: String { sessionId }
-    var displayStatus: String { status.isEmpty ? "session" : status }
+    var displayStatus: String {
+        if isSleeping { return "sleep" }
+        let activityState = Self.normalizedSessionState(activity)
+        let statusState = Self.normalizedSessionState(status)
+        if Self.isActionableStatus(activityState) { return activityState }
+        if Self.isActionableStatus(statusState) { return statusState }
+        if activityState == "sleep" || statusState == "sleep" { return "sleep" }
+        if !activityState.isEmpty, activityState != "running" { return activityState }
+        if !statusState.isEmpty, statusState != "running" { return statusState }
+        return "idle"
+    }
 
     static func parseList(from data: Data) throws -> [GhostexRemoteSession] {
-        let jsonData: Data
-        if let text = String(data: data, encoding: .utf8),
-           let start = text.firstIndex(of: "{"),
-           let end = text.lastIndex(of: "}"),
-           start <= end {
-            jsonData = Data(text[start...end].utf8)
-        } else {
-            jsonData = data
-        }
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-28-19:43:
+        The new VVTerm iOS Ghostex sidebar should ignore the ditched a-Shell fork and only show Mac-hosted ZMX-backed sessions. Parse the first complete sessions JSON object from noisy SSH/login-shell output so profile warnings or brace-like log text do not hide the usable Ghostex inventory.
+        */
+        let jsonData = try sessionListJSONData(from: data)
 
         guard let root = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             throw GhostexError("Ghostex sessions output was not JSON.")
@@ -39,34 +48,149 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         }
 
         let rawSessions = root["sessions"] as? [[String: Any]] ?? []
-        return rawSessions.compactMap(Self.init(json:))
+        return rawSessions.compactMap(Self.init(json:)).filter(\.isZmxBacked)
     }
 
-    init?(json: [String: Any]) {
+    nonisolated init?(json: [String: Any]) {
         let id = Self.string(json["sessionId"] ?? json["id"])
         if id.isEmpty { return nil }
 
         sessionId = id
-        alias = Self.string(json["alias"]).isEmpty ? "#" : Self.string(json["alias"])
-        title = Self.string(json["title"]).isEmpty ? "Terminal Session" : Self.string(json["title"])
-        projectId = Self.string(json["projectId"]).isEmpty ? Self.string(json["projectPath"]) : Self.string(json["projectId"])
+        let rawAlias = Self.string(json["alias"])
+        alias = rawAlias.isEmpty ? Self.alias(from: id) : rawAlias
+        title = Self.firstNonEmpty(
+            Self.string(json["title"]),
+            Self.string(json["primaryTitle"]),
+            Self.string(json["terminalTitle"]),
+            "Terminal Session"
+        )
         groupId = Self.string(json["groupId"])
-        projectName = Self.string(json["projectName"]).isEmpty ? "Project" : Self.string(json["projectName"])
+        projectId = Self.firstNonEmpty(Self.string(json["projectId"]), groupId, Self.string(json["projectPath"]))
+        projectName = Self.firstNonEmpty(Self.string(json["projectName"]), Self.string(json["groupTitle"]), "Project")
         projectPath = Self.string(json["projectPath"])
-        status = Self.string(json["status"])
+        activity = Self.normalizedSessionState(Self.firstNonEmpty(
+            Self.string(json["activity"]),
+            Self.string(json["activityState"]),
+            Self.string(json["activityStatus"])
+        ))
+        status = Self.normalizedSessionState(Self.firstNonEmpty(
+            Self.string(json["status"]),
+            Self.string(json["lifecycleState"])
+        ))
+        provider = Self.normalizedToken(Self.firstNonEmpty(
+            Self.string(json["provider"]),
+            Self.string(json["sessionPersistenceProvider"])
+        ))
         agent = Self.string(json["agent"])
         agentIcon = Self.string(json["agentIcon"])
-        providerSessionName = Self.string(json["providerSessionName"])
+        providerSessionName = Self.firstNonEmpty(
+            Self.string(json["providerSessionName"]),
+            Self.string(json["sessionPersistenceName"])
+        )
         attachCommand = Self.string(json["attachCommand"])
         resumeCommand = Self.string(json["resumeCommand"])
         isFocused = (json["isFocused"] as? Bool) ?? false
+        isSleeping = (json["isSleeping"] as? Bool) ?? (status == "sleep")
         lastInteractionAt = Self.string(json["lastInteractionAt"])
+    }
+
+    var isZmxBacked: Bool {
+        provider == "zmx"
     }
 
     private static func string(_ value: Any?) -> String {
         if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
         if let value = value as? NSNumber { return value.stringValue }
         return ""
+    }
+
+    private static func firstNonEmpty(_ values: String...) -> String {
+        values.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func alias(from sessionId: String) -> String {
+        String(sessionId.prefix(4))
+    }
+
+    private static func normalizedToken(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func normalizedSessionState(_ value: String) -> String {
+        let normalized = normalizedToken(value)
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+        switch normalized {
+        case "needs-attention", "attention-required":
+            return "attention"
+        case "active", "busy", "processing":
+            return "working"
+        case "sleeping":
+            return "sleep"
+        default:
+            return normalized
+        }
+    }
+
+    private static func isActionableStatus(_ value: String) -> Bool {
+        ["attention", "working", "done", "error"].contains(value)
+    }
+
+    private static func sessionListJSONData(from data: Data) throws -> Data {
+        guard let text = String(data: data, encoding: .utf8) else { return data }
+        var searchStart = text.startIndex
+        var sawIncompleteObject = false
+
+        while searchStart < text.endIndex {
+            guard let start = text[searchStart...].firstIndex(of: "{") else { break }
+            guard let end = jsonObjectEnd(in: text, startingAt: start) else {
+                sawIncompleteObject = true
+                searchStart = text.index(after: start)
+                continue
+            }
+
+            let candidate = Data(text[start...end].utf8)
+            if let root = try? JSONSerialization.jsonObject(with: candidate) as? [String: Any],
+               root["sessions"] is [[String: Any]] {
+                return candidate
+            }
+            searchStart = text.index(after: end)
+        }
+
+        if sawIncompleteObject {
+            throw GhostexError("Ghostex CLI returned incomplete JSON.")
+        }
+        throw GhostexError(text.contains("{") ? "Ghostex CLI did not return a sessions JSON payload." : "Ghostex CLI did not return JSON.")
+    }
+
+    private static func jsonObjectEnd(in text: String, startingAt start: String.Index) -> String.Index? {
+        var index = start
+        var depth = 0
+        var inString = false
+        var escaping = false
+
+        while index < text.endIndex {
+            let character = text[index]
+            if inString {
+                if escaping {
+                    escaping = false
+                } else if character == "\\" {
+                    escaping = true
+                } else if character == "\"" {
+                    inString = false
+                }
+            } else if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 { return index }
+            }
+            index = text.index(after: index)
+        }
+
+        return nil
     }
 }
 
@@ -79,9 +203,9 @@ struct GhostexProjectGroup: Identifiable, Hashable {
     let sessions: [GhostexRemoteSession]
 
     var id: String { key }
-    var workingCount: Int { sessions.filter { $0.status != "sleep" }.count }
-    var sleepingCount: Int { sessions.filter { $0.status == "sleep" }.count }
-    var attentionCount: Int { sessions.filter { $0.status == "attention" }.count }
+    var workingCount: Int { sessions.filter { $0.displayStatus != "sleep" }.count }
+    var sleepingCount: Int { sessions.filter { $0.displayStatus == "sleep" }.count }
+    var attentionCount: Int { sessions.filter { $0.displayStatus == "attention" }.count }
 
     static func groups(from sessions: [GhostexRemoteSession]) -> [GhostexProjectGroup] {
         var groups: [GhostexProjectGroup] = []
@@ -152,6 +276,14 @@ enum GhostexAgentIdentity {
     }
 }
 
+enum GhostexZmxViewportRefresh {
+    /*
+    CDXC:iOSGhostexSidebar 2026-05-28-20:59:
+    ZMX-backed mobile attaches need Android's post-switch redraw OSC after VVTerm reports the current grid, otherwise the remote ZMX client can keep stale dimensions after the iOS tab becomes visible.
+    */
+    static let sequence = "\u{001B}]1337;ZMX_REFRESH\u{0007}"
+}
+
 enum GhostexRemoteCommand {
     static let sessionsList = loginShellCommand("ghostex sessions --json")
 
@@ -164,7 +296,7 @@ enum GhostexRemoteCommand {
     }
 
     static func createSession(project: GhostexProjectGroup) -> String {
-        var command = "ghostex create-session Terminal"
+        var command = "ghostex create-session --json"
         if !project.projectId.isEmpty { command += " --project-id \(shellQuote(project.projectId))" }
         if !project.groupId.isEmpty { command += " --group-id \(shellQuote(project.groupId))" }
         return loginShellCommand(command)
@@ -188,6 +320,77 @@ enum GhostexRemoteCommand {
 
     static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+}
+
+enum GhostexCreateSessionResult {
+    static func createdSessionId(from output: String) -> String? {
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-28-20:37:
+        Ghostex create-session returns the underlying ZMX sessionId plus the sidebar/list identity as ghostexId. Match the list identity first so create-and-attach can find the refreshed session instead of reporting a false missing-session error.
+        */
+        guard let data = try? jsonData(from: output),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (root["ok"] as? Bool) != false,
+              let session = root["session"] as? [String: Any] else {
+            return nil
+        }
+        let sessionId = string(session["ghostexId"] ?? session["sessionId"] ?? session["id"])
+        return sessionId.isEmpty ? nil : sessionId
+    }
+
+    private static func jsonData(from output: String) throws -> Data {
+        var searchStart = output.startIndex
+        while searchStart < output.endIndex {
+            guard let start = output[searchStart...].firstIndex(of: "{") else { break }
+            guard let end = jsonObjectEnd(in: output, startingAt: start) else {
+                searchStart = output.index(after: start)
+                continue
+            }
+            let candidate = Data(output[start...end].utf8)
+            if let root = try? JSONSerialization.jsonObject(with: candidate) as? [String: Any],
+               root["session"] is [String: Any] {
+                return candidate
+            }
+            searchStart = output.index(after: end)
+        }
+        throw GhostexError("Ghostex create-session did not return JSON.")
+    }
+
+    private static func jsonObjectEnd(in text: String, startingAt start: String.Index) -> String.Index? {
+        var index = start
+        var depth = 0
+        var inString = false
+        var escaping = false
+
+        while index < text.endIndex {
+            let character = text[index]
+            if inString {
+                if escaping {
+                    escaping = false
+                } else if character == "\\" {
+                    escaping = true
+                } else if character == "\"" {
+                    inString = false
+                }
+            } else if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 { return index }
+            }
+            index = text.index(after: index)
+        }
+
+        return nil
+    }
+
+    private static func string(_ value: Any?) -> String {
+        if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let value = value as? NSNumber { return value.stringValue }
+        return ""
     }
 }
 
