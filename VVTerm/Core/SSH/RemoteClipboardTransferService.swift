@@ -5,6 +5,7 @@ actor RemoteClipboardTransferService {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "RemoteClipboardTransfer")
     private let sessionId: UUID
     private var didSweepStaleFiles = false
+    private var didSweepStaleAttachments = false
 
     init(sessionId: UUID) {
         self.sessionId = sessionId
@@ -80,6 +81,81 @@ actor RemoteClipboardTransferService {
         }
     }
 
+    func uploadAttachment(
+        _ payload: TerminalAttachmentUploadPayload,
+        using sshClient: SSHClient
+    ) async throws -> RemoteClipboardUpload {
+        /*
+        CDXC:iOSGhostexAttachments 2026-05-29-04:03:
+        Ghostex iOS needs the Android-style terminal upload path for screenshots, images, and general files while a terminal is active. Store picked files under a remote temp attachment directory and paste a terminal-friendly markdown link instead of routing users through the remote file browser or clipboard-only rich paste flow.
+        */
+        let environment = await sshClient.remoteEnvironment()
+        logger.info(
+            "Preparing remote attachment upload [session: \(self.sessionId.uuidString, privacy: .public)] [platform: \(environment.platform.rawValue, privacy: .public)] [shell: \(environment.shellProfile.family.rawValue, privacy: .public)] [bytes: \(payload.sizeBytes)] [filename: \(payload.filename, privacy: .public)]"
+        )
+        guard environment.platform != .windows else {
+            throw TerminalRichPasteError.unsupportedRemotePlatform(environment.platform)
+        }
+        guard environment.shellProfile.family == .posix else {
+            throw TerminalRichPasteError.unsupportedRemoteShell
+        }
+
+        let remotePath: String
+        do {
+            remotePath = try await createRemoteAttachmentPath(
+                filename: payload.filename,
+                using: sshClient
+            )
+        } catch {
+            logger.error(
+                "Remote attachment path creation failed [session: \(self.sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+            )
+            if let sshError = error as? SSHError, case .timeout = sshError {
+                throw TerminalRichPasteError.remoteUploadFailed(String(localized: "timed out while creating remote attachment file"))
+            }
+            throw error
+        }
+
+        let uploadStrategy: SSHUploadStrategy = {
+            switch environment.platform {
+            case .linux:
+                return .automatic
+            case .darwin, .freebsd, .openbsd, .netbsd, .windows, .unknown:
+                return .execPreferred
+            }
+        }()
+        logger.info(
+            "Uploading remote attachment [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)] [strategy: \(String(describing: uploadStrategy), privacy: .public)]"
+        )
+
+        do {
+            try await sshClient.upload(
+                payload.data,
+                to: remotePath,
+                permissions: Int32(0o600),
+                strategy: uploadStrategy
+            )
+            logger.info(
+                "Remote attachment upload completed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)]"
+            )
+            scheduleStaleAttachmentSweepIfNeeded(using: sshClient)
+            return RemoteClipboardUpload(
+                remotePath: remotePath,
+                mimeType: payload.mimeType,
+                sizeBytes: payload.sizeBytes
+            )
+        } catch {
+            logger.error(
+                "Remote attachment upload failed [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(remotePath, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+            )
+            await deleteRemoteFileIfNeeded(at: remotePath, using: sshClient)
+            if let sshError = error as? SSHError, case .timeout = sshError {
+                throw TerminalRichPasteError.remoteUploadFailed(String(localized: "timed out while uploading attachment bytes"))
+            }
+            throw TerminalRichPasteError.remoteUploadFailed(error.localizedDescription)
+        }
+    }
+
     private func createRemoteTemporaryPath(
         extension fileExtension: String,
         using sshClient: SSHClient
@@ -109,12 +185,54 @@ actor RemoteClipboardTransferService {
         return path
     }
 
+    private func createRemoteAttachmentPath(
+        filename: String,
+        using sshClient: SSHClient
+    ) async throws -> String {
+        let sanitizedFilename = sanitizeFilename(filename)
+        let mktempCommand = RemoteTerminalBootstrap.wrapPOSIXShellCommand(
+            """
+            tmp_base="${TMPDIR:-/tmp}";
+            attachment_dir="${tmp_base%/}/ghostex-ios-attachments";
+            mkdir -p "$attachment_dir" || exit 1;
+            tmp_path="$(mktemp "$attachment_dir/upload-XXXXXX")" || exit 1;
+            target_path="${tmp_path}-\(sanitizedFilename)";
+            mv "$tmp_path" "$target_path" || {
+                rm -f "$tmp_path";
+                exit 1;
+            };
+            printf '%s\n' "$target_path"
+            """
+        )
+
+        let output = try await sshClient.execute(mktempCommand)
+        let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty, path.hasPrefix("/") else {
+            throw TerminalRichPasteError.remoteTempFileCreationFailed
+        }
+        logger.info(
+            "Created remote attachment path [session: \(self.sessionId.uuidString, privacy: .public)] [path: \(path, privacy: .public)]"
+        )
+        return path
+    }
+
     private func sanitizeExtension(_ fileExtension: String) -> String {
         let filteredScalars = fileExtension.unicodeScalars.filter { scalar in
             CharacterSet.alphanumerics.contains(scalar)
         }
         let sanitized = String(String.UnicodeScalarView(filteredScalars))
         return sanitized.isEmpty ? "bin" : sanitized.lowercased()
+    }
+
+    private func sanitizeFilename(_ filename: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
+        let filteredScalars = filename.unicodeScalars.map { scalar -> UnicodeScalar in
+            allowed.contains(scalar) ? scalar : "-"
+        }
+        let sanitized = String(String.UnicodeScalarView(filteredScalars))
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".-_\n\t "))
+        let fallback = sanitized.isEmpty ? "upload.bin" : sanitized
+        return String(fallback.prefix(96))
     }
 
     private func scheduleStaleFileSweepIfNeeded(using sshClient: SSHClient) {
@@ -145,6 +263,38 @@ actor RemoteClipboardTransferService {
             } catch {
                 logger.debug(
                     "Skipping stale clipboard temp file sweep result [session: \(sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
+                )
+            }
+        }
+    }
+
+    private func scheduleStaleAttachmentSweepIfNeeded(using sshClient: SSHClient) {
+        guard !didSweepStaleAttachments else { return }
+        didSweepStaleAttachments = true
+
+        let command = RemoteTerminalBootstrap.wrapPOSIXShellCommand(
+            """
+            tmp_base="${TMPDIR:-/tmp}";
+            attachment_dir="${tmp_base%/}/ghostex-ios-attachments";
+            [ -d "$attachment_dir" ] || exit 0;
+            find "$attachment_dir" -type f -mtime +2 -exec rm -f -- {} \\; >/dev/null 2>&1 || true
+            """
+        )
+
+        let sessionId = self.sessionId
+        logger.debug("Scheduling stale attachment temp file sweep [session: \(self.sessionId.uuidString, privacy: .public)]")
+
+        Task(priority: .utility) {
+            let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "RemoteClipboardTransfer")
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            logger.debug("Sweeping stale attachment temp files [session: \(sessionId.uuidString, privacy: .public)]")
+            do {
+                _ = try await sshClient.execute(command, timeout: .seconds(2))
+                logger.debug("Finished stale attachment temp file sweep [session: \(sessionId.uuidString, privacy: .public)]")
+            } catch {
+                logger.debug(
+                    "Skipping stale attachment temp file sweep result [session: \(sessionId.uuidString, privacy: .public)] [error: \(error.localizedDescription, privacy: .public)]"
                 )
             }
         }

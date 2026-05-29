@@ -6,6 +6,7 @@
 import SwiftUI
 #if os(iOS)
 import UIKit
+import UniformTypeIdentifiers
 #endif
 
 #if os(iOS)
@@ -741,6 +742,17 @@ struct iOSEnvironmentFilterMenu: View {
 
 // MARK: - iOS Terminal View
 
+private enum TerminalAttachmentUploadViewError: LocalizedError {
+    case notConnected
+
+    var errorDescription: String? {
+        switch self {
+        case .notConnected:
+            return String(localized: "Reconnect the terminal before uploading files.")
+        }
+    }
+}
+
 struct iOSTerminalView: View {
     @ObservedObject var sessionManager: ConnectionSessionManager
     @ObservedObject var serverManager: ServerManager
@@ -771,6 +783,12 @@ struct iOSTerminalView: View {
     @State private var requestedTerminalDismissal = false
     @State private var voiceRecordingBySession: [UUID: Bool] = [:]
     @State private var pendingVoiceReturnBySession: [UUID: Bool] = [:]
+    @State private var showingTerminalAttachmentImporter = false
+    @State private var pendingTerminalAttachmentSessionId: UUID?
+    @State private var terminalAttachmentUploadError: String?
+    @State private var isUploadingTerminalAttachment = false
+    @State private var terminalImageUploadCount = 0
+    @State private var terminalFileUploadCount = 0
 
     @SceneStorage("vvterm.zenMode.ios") private var isZenModeEnabled = false
 
@@ -891,6 +909,25 @@ struct iOSTerminalView: View {
     private var shouldShowFloatingReturnButton: Bool {
         guard let sessionId = effectiveSelectedSessionId else { return false }
         return shouldShowFloatingTerminalControls && pendingVoiceReturnBySession[sessionId] == true
+    }
+
+    private var canUploadTerminalAttachment: Bool {
+        guard selectedView == ConnectionViewTab.terminal.id,
+              let sessionId = effectiveSelectedSessionId else {
+            return false
+        }
+        return !isUploadingTerminalAttachment && sessionManager.sshClient(forSessionId: sessionId) != nil
+    }
+
+    private var terminalAttachmentUploadErrorBinding: Binding<Bool> {
+        Binding(
+            get: { terminalAttachmentUploadError != nil },
+            set: { newValue in
+                if !newValue {
+                    terminalAttachmentUploadError = nil
+                }
+            }
+        )
     }
 
     private var canUseZenMode: Bool {
@@ -1026,6 +1063,17 @@ struct iOSTerminalView: View {
 
     var body: some View {
         alertContent
+            .fileImporter(
+                isPresented: $showingTerminalAttachmentImporter,
+                allowedContentTypes: [.item],
+                allowsMultipleSelection: false,
+                onCompletion: handleTerminalAttachmentImporterResult
+            )
+            .alert(String(localized: "Upload Failed"), isPresented: terminalAttachmentUploadErrorBinding) {
+                Button("OK", role: .cancel) { terminalAttachmentUploadError = nil }
+            } message: {
+                Text(terminalAttachmentUploadError ?? "")
+            }
             .onAppear {
                 updateTerminalBackgroundColor()
                 if currentServerId == nil {
@@ -1365,6 +1413,18 @@ struct iOSTerminalView: View {
 
         ToolbarItemGroup(placement: .navigationBarTrailing) {
             if selectedView == "terminal" {
+                /*
+                CDXC:iOSGhostexAttachments 2026-05-29-04:03:
+                The terminal view needs a visible image/file upload affordance like Android's attach button. Keep it in the main terminal toolbar so the picker is available during active Ghostex sessions, not only through clipboard paste or the remote file browser.
+                */
+                Button {
+                    presentTerminalAttachmentPicker()
+                } label: {
+                    Image(systemName: isUploadingTerminalAttachment ? "hourglass" : "paperclip")
+                }
+                .disabled(!canUploadTerminalAttachment)
+                .accessibilityLabel("Upload Image or File")
+
                 Button {
                     openNewTab()
                 } label: {
@@ -1482,6 +1542,95 @@ struct iOSTerminalView: View {
         terminal.showFindNavigator()
     }
 
+    private func presentTerminalAttachmentPicker() {
+        guard canUploadTerminalAttachment,
+              let selectedId = effectiveSelectedSessionId else {
+            terminalAttachmentUploadError = String(localized: "Reconnect the terminal before uploading files.")
+            return
+        }
+        pendingTerminalAttachmentSessionId = selectedId
+        showingTerminalAttachmentImporter = true
+    }
+
+    private func handleTerminalAttachmentImporterResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first,
+                  let sessionId = pendingTerminalAttachmentSessionId else {
+                pendingTerminalAttachmentSessionId = nil
+                return
+            }
+            uploadTerminalAttachment(from: url, to: sessionId)
+        case .failure(let error):
+            terminalAttachmentUploadError = error.localizedDescription
+            pendingTerminalAttachmentSessionId = nil
+        }
+    }
+
+    private func uploadTerminalAttachment(from url: URL, to sessionId: UUID) {
+        isUploadingTerminalAttachment = true
+        terminalAttachmentUploadError = nil
+        Task { @MainActor in
+            defer {
+                isUploadingTerminalAttachment = false
+                pendingTerminalAttachmentSessionId = nil
+            }
+
+            do {
+                let payload = try await Task.detached(priority: .userInitiated) {
+                    try Self.makeTerminalAttachmentPayload(from: url)
+                }.value
+
+                guard let sshClient = sessionManager.sshClient(forSessionId: sessionId) else {
+                    throw TerminalAttachmentUploadViewError.notConnected
+                }
+
+                let service = RemoteClipboardTransferService(sessionId: sessionId)
+                let upload = try await service.uploadAttachment(payload, using: sshClient)
+                let title = nextTerminalAttachmentTitle(isImage: payload.isImage)
+                sessionManager.sendText("[\(title)](\(upload.remotePath))", to: sessionId)
+            } catch {
+                if let sshError = error as? SSHError, case .notConnected = sshError {
+                    terminalAttachmentUploadError = String(localized: "Reconnect the terminal before uploading files.")
+                } else {
+                    terminalAttachmentUploadError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func nextTerminalAttachmentTitle(isImage: Bool) -> String {
+        if isImage {
+            terminalImageUploadCount += 1
+            return "Image #\(terminalImageUploadCount)"
+        }
+        terminalFileUploadCount += 1
+        return "File #\(terminalFileUploadCount)"
+    }
+
+    nonisolated private static func makeTerminalAttachmentPayload(from url: URL) throws -> TerminalAttachmentUploadPayload {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey])
+        let filename = url.lastPathComponent.isEmpty ? "upload.bin" : url.lastPathComponent
+        let type = resourceValues.contentType ?? UTType(filenameExtension: url.pathExtension)
+        let mimeType = type?.preferredMIMEType ?? "application/octet-stream"
+        let isImage = type?.conforms(to: .image) ?? mimeType.hasPrefix("image/")
+        let data = try Data(contentsOf: url)
+
+        return TerminalAttachmentUploadPayload(
+            data: data,
+            filename: filename,
+            mimeType: mimeType,
+            isImage: isImage
+        )
+    }
+
     @ViewBuilder
     private var floatingTerminalControls: some View {
         if shouldShowFloatingReturnButton {
@@ -1518,6 +1667,9 @@ struct iOSTerminalView: View {
     private func floatingKeyboardVoiceControls(showsTitle: Bool) -> some View {
         HStack(spacing: 10) {
             floatingKeyboardControl(showsTitle: showsTitle)
+            if canUploadTerminalAttachment {
+                floatingUploadControl(showsTitle: showsTitle)
+            }
             if shouldShowFloatingVoiceButton {
                 floatingVoiceControl(showsTitle: showsTitle)
             }
@@ -1545,6 +1697,18 @@ struct iOSTerminalView: View {
             showsTitle: showsTitle
         ) {
             startVoiceInputForCurrentSession()
+        }
+    }
+
+    @ViewBuilder
+    private func floatingUploadControl(showsTitle: Bool) -> some View {
+        floatingTerminalControlButton(
+            title: "Upload",
+            systemImage: isUploadingTerminalAttachment ? "hourglass" : "paperclip",
+            accessibilityLabel: "Upload Image or File",
+            showsTitle: showsTitle
+        ) {
+            presentTerminalAttachmentPicker()
         }
     }
 

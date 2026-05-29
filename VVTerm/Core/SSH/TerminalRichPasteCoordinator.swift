@@ -7,6 +7,17 @@ struct RemoteClipboardUpload: Sendable {
     let sizeBytes: Int
 }
 
+struct TerminalAttachmentUploadPayload: Sendable {
+    let data: Data
+    let filename: String
+    let mimeType: String
+    let isImage: Bool
+
+    nonisolated var sizeBytes: Int {
+        data.count
+    }
+}
+
 struct RichPasteUploadResult: Sendable, Equatable {
     let remotePath: String
     let seededRemoteClipboard: Bool

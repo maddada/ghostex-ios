@@ -435,7 +435,14 @@ actor SSHClient {
 
         let connectionMode = connectedServer?.connectionMode ?? .standard
         let environment = await remoteEnvironment()
-        let terminalType = await remoteTerminalType()
+        let commandBackedShell = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        /*
+        CDXC:iOSGhostexConnectTiming 2026-05-29-04:08:
+        Ghostex attach sessions are command-backed shells and should become interactive as soon as SSH can exec the attach command. Skip the xterm-ghostty terminfo probe/install cycle for startup-command shells because that probe can spend several seconds before shell registration, while the Ghostex/ZMX attach path only needs the default compatible terminal type plus the post-connect viewport refresh.
+        */
+        let terminalType = commandBackedShell
+            ? RemoteTerminalBootstrap.defaultTerminalType
+            : await remoteTerminalType()
         if connectionMode != .mosh {
             let sshShell = try await session.startShell(
                 cols: cols,
