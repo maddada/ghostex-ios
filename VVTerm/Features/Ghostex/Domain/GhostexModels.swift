@@ -18,18 +18,21 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let resumeCommand: String
     let isFocused: Bool
     let isSleeping: Bool
+    let nativePaneState: String
+    let providerSessionState: String
+    let isLive: Bool
     let lastInteractionAt: String
 
     var id: String { sessionId }
     var displayStatus: String {
-        if isSleeping { return "sleep" }
+        if isSleeping && !isLive { return "sleep" }
         let activityState = Self.normalizedSessionState(activity)
         let statusState = Self.normalizedSessionState(status)
         if Self.isActionableStatus(activityState) { return activityState }
         if Self.isActionableStatus(statusState) { return statusState }
-        if activityState == "sleep" || statusState == "sleep" { return "sleep" }
-        if !activityState.isEmpty, activityState != "running" { return activityState }
-        if !statusState.isEmpty, statusState != "running" { return statusState }
+        if !isLive, activityState == "sleep" || statusState == "sleep" { return "sleep" }
+        if !activityState.isEmpty, activityState != "running", !isLive || activityState != "sleep" { return activityState }
+        if !statusState.isEmpty, statusState != "running", !isLive || statusState != "sleep" { return statusState }
         return "idle"
     }
 
@@ -37,6 +40,22 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         /*
         CDXC:iOSGhostexSidebar 2026-05-28-19:43:
         The new VVTerm iOS Ghostex sidebar should ignore the ditched a-Shell fork and only show Mac-hosted ZMX-backed sessions. Parse the first complete sessions JSON object from noisy SSH/login-shell output so profile warnings or brace-like log text do not hide the usable Ghostex inventory.
+
+        CDXC:iOSGhostexSidebar 2026-05-29-09:20:
+        The Mac inventory separates native pane mount state from provider
+        session existence. Parse those resource states and derived `isLive` so
+        iOS keeps zmx-backed sessions visible as live even when no Mac native
+        pane is currently mounted.
+
+        CDXC:iOSGhostexSidebar 2026-05-29-06:29:
+        Provider-disabled Mac sessions should parse as `providerSessionState:
+        persistence-disabled`, not unknown, so iOS can tell disabled persistence
+        apart from an incomplete provider existence check.
+
+        CDXC:iOSGhostexSidebar 2026-05-29-07:19:
+        Normalize provider-disabled sessions to `persistence-disabled`, not
+        generic `disabled`, so the mobile contract names the exact capability
+        that is off.
         */
         let jsonData = try sessionListJSONData(from: data)
 
@@ -90,7 +109,25 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         attachCommand = Self.string(json["attachCommand"])
         resumeCommand = Self.string(json["resumeCommand"])
         isFocused = (json["isFocused"] as? Bool) ?? false
-        isSleeping = (json["isSleeping"] as? Bool) ?? (status == "sleep")
+        let legacySleeping = (json["isSleeping"] as? Bool) ?? (status == "sleep")
+        let parsedNativePaneState = Self.normalizedNativePaneState(
+            Self.string(json["nativePaneState"]),
+            isSleeping: legacySleeping,
+            activity: activity,
+            status: status
+        )
+        let parsedProviderSessionState = Self.normalizedProviderSessionState(Self.string(json["providerSessionState"]))
+        let parsedIsLive = (json["isLive"] as? Bool) ?? Self.derivedIsLive(
+            nativePaneState: parsedNativePaneState,
+            providerSessionState: parsedProviderSessionState,
+            isSleeping: legacySleeping,
+            activity: activity,
+            status: status
+        )
+        nativePaneState = parsedNativePaneState
+        providerSessionState = parsedProviderSessionState
+        isLive = parsedIsLive
+        isSleeping = legacySleeping && !parsedIsLive
         lastInteractionAt = Self.string(json["lastInteractionAt"])
     }
 
@@ -130,6 +167,63 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         default:
             return normalized
         }
+    }
+
+    private static func normalizedNativePaneState(_ value: String, isSleeping: Bool, activity: String, status: String) -> String {
+        let normalized = normalizedToken(value)
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+        if ["mounted", "mounting", "unmounted"].contains(normalized) {
+            return normalized
+        }
+        return defaultNativePaneState(isSleeping: isSleeping, activity: activity, status: status)
+    }
+
+    private static func defaultNativePaneState(isSleeping: Bool, activity: String, status: String) -> String {
+        if isSleeping { return "unmounted" }
+        let activityState = normalizedSessionState(activity)
+        let statusState = normalizedSessionState(status)
+        if isLiveActivityState(activityState) || isLiveActivityState(statusState) ||
+            activityState == "running" || statusState == "running" ||
+            activityState == "idle" || statusState == "idle" {
+            return "mounted"
+        }
+        return "unmounted"
+    }
+
+    private static func normalizedProviderSessionState(_ value: String) -> String {
+        let normalized = normalizedToken(value)
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+        if ["persistence-disabled", "exists", "missing", "unknown"].contains(normalized) {
+            return normalized
+        }
+        if ["disabled", "none", "off", "disabled-persistence"].contains(normalized) {
+            return "persistence-disabled"
+        }
+        if normalized == "running" { return "exists" }
+        return "unknown"
+    }
+
+    private static func derivedIsLive(nativePaneState: String, providerSessionState: String, isSleeping: Bool, activity: String, status: String) -> Bool {
+        if nativePaneState == "mounted" || nativePaneState == "mounting" || providerSessionState == "exists" {
+            return true
+        }
+        let activityState = normalizedSessionState(activity)
+        let statusState = normalizedSessionState(status)
+        if isLiveActivityState(activityState) || isLiveActivityState(statusState) { return true }
+        if isSleeping || activityState == "sleep" || statusState == "sleep" ||
+            activityState == "done" || statusState == "done" ||
+            activityState == "error" || statusState == "error" ||
+            statusState == "exited" {
+            return false
+        }
+        return activityState == "running" || statusState == "running" ||
+            activityState == "idle" || statusState == "idle"
+    }
+
+    private static func isLiveActivityState(_ value: String) -> Bool {
+        value == "working" || value == "attention"
     }
 
     private static func isActionableStatus(_ value: String) -> Bool {

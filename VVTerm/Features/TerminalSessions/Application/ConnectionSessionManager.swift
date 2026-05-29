@@ -17,6 +17,11 @@ final class ConnectionSessionManager: ObservableObject {
         let clientToDisconnect: SSHClient?
     }
 
+    private struct TerminalViewportRefreshRequest {
+        let redrawSequence: String?
+        let reason: String
+    }
+
     @Published var sessions: [ConnectionSession] = [] {
         didSet {
             LiveActivityManager.shared.refresh(with: sessions)
@@ -29,6 +34,7 @@ final class ConnectionSessionManager: ObservableObject {
             if let selectedSessionId,
                let session = sessions.first(where: { $0.id == selectedSessionId }) {
                 selectedSessionByServer[session.serverId] = selectedSessionId
+                resumePendingTerminalViewportRefreshIfNeeded(for: selectedSessionId)
             }
             updateTmuxSelectionStatuses()
         }
@@ -100,6 +106,8 @@ final class ConnectionSessionManager: ObservableObject {
 
     private let terminalViewportRefreshDelay: Duration = .milliseconds(250)
     private let terminalViewportRefreshMaxAttempts = 6
+    private var pendingTerminalViewportRefreshes: [UUID: TerminalViewportRefreshRequest] = [:]
+    private var terminalViewportRefreshTasks: [UUID: Task<Void, Never>] = [:]
 
     private init() {
         restoreSnapshot()
@@ -623,6 +631,7 @@ final class ConnectionSessionManager: ObservableObject {
 
         setTransport(transport, fallbackReason: fallbackReason, for: sessionId)
         terminalsNeedingReconnectReset.remove(sessionId)
+        resumePendingTerminalViewportRefreshIfNeeded(for: sessionId)
 
         if !skipTmuxLifecycle {
             Task { [weak self] in
@@ -761,6 +770,7 @@ final class ConnectionSessionManager: ObservableObject {
         setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: sessionId)
         #endif
         touchTerminal(sessionId)
+        resumePendingTerminalViewportRefreshIfNeeded(for: sessionId)
 
         logger.debug("Registered terminal for session, total: \(self.terminalViews.count)/\(self.maxTerminals)")
     }
@@ -771,6 +781,8 @@ final class ConnectionSessionManager: ObservableObject {
         terminalBrowseModeBySession.removeValue(forKey: sessionId)
         terminalFindNavigatorVisibleBySession.removeValue(forKey: sessionId)
         removeTerminalFromAccessOrder(sessionId)
+        terminalViewportRefreshTasks[sessionId]?.cancel()
+        terminalViewportRefreshTasks.removeValue(forKey: sessionId)
         logger.debug("Unregistered terminal, remaining: \(self.terminalViews.count)")
     }
 
@@ -920,7 +932,14 @@ final class ConnectionSessionManager: ObservableObject {
         /*
         CDXC:iOSGhostexSidebar 2026-05-28-20:57:
         Mobile Ghostex attaches can inherit stale remote ZMX dimensions after the tab switch. Match Android's attach refresh by waiting for the selected VVTerm surface and SSH shell, forcing the local Ghostty size/redraw, resizing the remote PTY, then letting the caller send a provider-specific redraw sequence.
+
+        CDXC:iOSGhostexViewportRefresh 2026-05-29-04:03:
+        Simulator SSH attaches can take longer than Android's six 250 ms viewport-ready passes. Keep the refresh request pending until the selected Ghostty surface and registered SSH shell exist, then send the resize/redraw cycle once instead of letting the early retry window expire before connect finishes.
         */
+        pendingTerminalViewportRefreshes[sessionId] = TerminalViewportRefreshRequest(
+            redrawSequence: redrawSequence,
+            reason: reason
+        )
         scheduleTerminalViewportRefreshAfterSessionSwitch(
             sessionId: sessionId,
             redrawSequence: redrawSequence,
@@ -936,9 +955,11 @@ final class ConnectionSessionManager: ObservableObject {
         attempt: Int
     ) {
         let delay = terminalViewportRefreshDelay
-        Task { [weak self] in
+        terminalViewportRefreshTasks[sessionId]?.cancel()
+        terminalViewportRefreshTasks[sessionId] = Task { [weak self] in
             try? await Task.sleep(for: delay)
-            await self?.refreshTerminalViewportAfterSessionSwitch(
+            guard !Task.isCancelled else { return }
+            self?.refreshTerminalViewportAfterSessionSwitch(
                 sessionId: sessionId,
                 redrawSequence: redrawSequence,
                 reason: reason,
@@ -953,7 +974,11 @@ final class ConnectionSessionManager: ObservableObject {
         reason: String,
         attempt: Int
     ) {
-        guard let session = sessionWithID(sessionId) else { return }
+        guard let session = sessionWithID(sessionId) else {
+            pendingTerminalViewportRefreshes.removeValue(forKey: sessionId)
+            terminalViewportRefreshTasks.removeValue(forKey: sessionId)
+            return
+        }
         guard selectedSessionId == sessionId else { return }
 
         guard let terminal = terminalViews[sessionId],
@@ -968,11 +993,14 @@ final class ConnectionSessionManager: ObservableObject {
                     attempt: attempt + 1
                 )
             } else {
-                logger.warning("Terminal viewport refresh skipped for \(sessionId.uuidString, privacy: .public): \(reason, privacy: .public)")
+                terminalViewportRefreshTasks.removeValue(forKey: sessionId)
+                logger.info("Terminal viewport refresh is waiting for a ready terminal shell for \(sessionId.uuidString, privacy: .public): \(reason, privacy: .public)")
             }
             return
         }
 
+        pendingTerminalViewportRefreshes.removeValue(forKey: sessionId)
+        terminalViewportRefreshTasks.removeValue(forKey: sessionId)
         terminal.resumeRendering()
         #if os(iOS)
         if terminal.bounds.width > 0, terminal.bounds.height > 0 {
@@ -994,10 +1022,24 @@ final class ConnectionSessionManager: ObservableObject {
                 if let redrawData {
                     try await client.write(redrawData, to: shellId)
                 }
+                logger.info("Terminal viewport refresh sent for \(sessionId.uuidString, privacy: .public): \(reason, privacy: .public) \(cols)x\(rows)")
             } catch {
                 logger.warning("Terminal viewport refresh failed for \(sessionId.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    private func resumePendingTerminalViewportRefreshIfNeeded(for sessionId: UUID) {
+        guard let pending = pendingTerminalViewportRefreshes[sessionId],
+              selectedSessionId == sessionId else {
+            return
+        }
+        scheduleTerminalViewportRefreshAfterSessionSwitch(
+            sessionId: sessionId,
+            redrawSequence: pending.redrawSequence,
+            reason: pending.reason,
+            attempt: 1
+        )
     }
 
     // MARK: - Reconnection

@@ -39,6 +39,49 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func providerBackedSessionDoesNotUseLegacySleepingStatus() throws {
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-29-09:20:
+        A zmx provider session can exist without a Mac native pane. The iOS
+        sidebar must treat that projected resource state as live instead of
+        trusting the legacy sleeping flag.
+        */
+        let output = """
+        {"sessions":[{"sessionId":"s1","projectId":"p1","projectName":"App","status":"sleep","provider":"zmx","isSleeping":true,"nativePaneState":"unmounted","providerSessionState":"exists","isLive":true}]}
+        """
+
+        let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
+
+        #expect(sessions.count == 1)
+        #expect(sessions[0].isLive)
+        #expect(!sessions[0].isSleeping)
+        #expect(sessions[0].displayStatus == "idle")
+        #expect(GhostexProjectGroup.groups(from: sessions)[0].sleepingCount == 0)
+    }
+
+    @Test
+    func disabledProviderStateIsNotUnknown() {
+        /*
+        CDXC:iOSGhostexSidebar 2026-05-29-06:29:
+        Disabled persistence is an explicit Mac-side configuration. Keep it as
+        `persistence-disabled` instead of collapsing it into unknown provider
+        state.
+        */
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "projectName": "App",
+            "status": "running",
+            "providerSessionState": "persistence-disabled",
+            "nativePaneState": "mounted",
+        ])
+
+        #expect(session?.providerSessionState == "persistence-disabled")
+        #expect(session?.isLive == true)
+        #expect(session?.displayStatus == "idle")
+    }
+
+    @Test
     func agentIdentityPrefersExplicitKnownIcon() {
         let icon = GhostexAgentIdentity.resolveIconId(agentIcon: "claude", agent: "Codex")
         #expect(icon == "claude")
