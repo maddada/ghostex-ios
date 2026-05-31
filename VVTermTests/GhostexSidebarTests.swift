@@ -169,6 +169,7 @@ struct GhostexSidebarTests {
         let command = GhostexRemoteCommand.renameSession(
             GhostexRemoteSession(json: [
                 "sessionId": "abc'123",
+                "projectId": "p1",
                 "title": "Old",
                 "provider": "zmx",
             ])!,
@@ -177,6 +178,23 @@ struct GhostexSidebarTests {
 
         #expect(command.hasPrefix("/bin/zsh -lc "))
         #expect(command.contains("rename-session"))
+        #expect(command.contains("--project-id"))
         #expect(command.contains("'\"'\"'"))
+    }
+
+    @Test
+    func sessionActionIncludesProjectIdWhenAvailable() {
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "title": "Work",
+            "provider": "zmx",
+        ])!
+
+        let command = GhostexRemoteCommand.sessionAction("sleep", session: session)
+
+        #expect(command.contains("ghostex sleep --session-id"))
+        #expect(command.contains("--project-id"))
+        #expect(command.contains("--json"))
     }
 }

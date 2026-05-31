@@ -114,7 +114,7 @@ final class GhostexSidebarStore: ObservableObject {
         using serverManager: ServerManager
     ) {
         runRemote(
-            GhostexRemoteCommand.sessionAction(action, sessionId: session.sessionId),
+            GhostexRemoteCommand.sessionAction(action, session: session),
             description: "\(action) \(session.sessionId)",
             refreshAfter: true,
             using: serverManager
@@ -302,7 +302,7 @@ final class GhostexSidebarStore: ObservableObject {
             do {
                 appendLog("Running \(action) for \(session.sessionId).")
                 _ = try await execute(
-                    GhostexRemoteCommand.sessionAction(action, sessionId: session.sessionId),
+                    GhostexRemoteCommand.sessionAction(action, session: session),
                     on: server
                 )
             } catch {

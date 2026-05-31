@@ -385,6 +385,19 @@ enum GhostexRemoteCommand {
         loginShellCommand("ghostex attach --session-id \(shellQuote(sessionId))")
     }
 
+    static func sessionAction(_ action: String, session: GhostexRemoteSession) -> String {
+        /*
+        CDXC:iOSRemoteSessions 2026-05-31-08:45:
+        gxserver lifecycle RPCs are project-scoped. iOS already has projectId
+        from the shared `ghostex sessions --json` inventory, so context actions
+        should send both ids and avoid depending on a Mac-side selector lookup.
+        */
+        var command = "ghostex \(action) --session-id \(shellQuote(session.sessionId))"
+        if !session.projectId.isEmpty { command += " --project-id \(shellQuote(session.projectId))" }
+        command += " --json"
+        return loginShellCommand(command)
+    }
+
     static func sessionAction(_ action: String, sessionId: String) -> String {
         loginShellCommand("ghostex \(action) --session-id \(shellQuote(sessionId)) --json")
     }
@@ -401,7 +414,10 @@ enum GhostexRemoteCommand {
     }
 
     static func renameSession(_ session: GhostexRemoteSession, title: String) -> String {
-        loginShellCommand("ghostex rename-session --session-id \(shellQuote(session.sessionId)) --title \(shellQuote(title)) --json")
+        var command = "ghostex rename-session --session-id \(shellQuote(session.sessionId))"
+        if !session.projectId.isEmpty { command += " --project-id \(shellQuote(session.projectId))" }
+        command += " --title \(shellQuote(title)) --json"
+        return loginShellCommand(command)
     }
 
     static func loginShellCommand(_ command: String) -> String {
