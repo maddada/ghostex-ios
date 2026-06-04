@@ -72,7 +72,7 @@ final class GhostexSidebarStore: ObservableObject {
         CDXC:iOSGhostexSidebar 2026-05-28-20:59:
         ZMX-backed mobile attaches need the same delayed viewport refresh as Android sidebar and notification taps so the remote ZMX client repaints with the VVTerm grid after the tab becomes current.
         */
-        let startupCommand = GhostexRemoteCommand.attach(sessionId: session.sessionId)
+        let startupCommand = GhostexRemoteCommand.attach(session)
         if let existingSession = sessionManager.sessions.first(where: {
             $0.serverId == server.id &&
                 $0.startupCommand == startupCommand &&
@@ -197,7 +197,7 @@ final class GhostexSidebarStore: ObservableObject {
     }
 
     func copyableAttachCommand(for session: GhostexRemoteSession, server: Server) -> String {
-        let remoteCommand = GhostexRemoteCommand.attach(sessionId: session.sessionId)
+        let remoteCommand = GhostexRemoteCommand.attach(session)
         let portFragment = server.port == 22 ? "" : " -p \(server.port)"
         return "ssh -tt\(portFragment) \(server.username)@\(server.host) \(GhostexRemoteCommand.shellQuote(remoteCommand))"
     }

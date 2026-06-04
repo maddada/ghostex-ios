@@ -381,8 +381,20 @@ enum GhostexZmxViewportRefresh {
 enum GhostexRemoteCommand {
     static let sessionsList = loginShellCommand("ghostex sessions --json")
 
-    static func attach(sessionId: String) -> String {
-        loginShellCommand("ghostex attach --session-id \(shellQuote(sessionId))")
+    static func attach(sessionId: String, projectId: String = "") -> String {
+        /*
+        CDXC:iOSRemoteAttach 2026-06-04-02:22:
+        gxserver session ids are scoped by project. Include projectId when the
+        mobile inventory has it so `ghostex attach` resolves the full
+        server/project/session zmx route instead of a bare G id.
+        */
+        var command = "ghostex attach --session-id \(shellQuote(sessionId))"
+        if !projectId.isEmpty { command += " --project-id \(shellQuote(projectId))" }
+        return loginShellCommand(command)
+    }
+
+    static func attach(_ session: GhostexRemoteSession) -> String {
+        attach(sessionId: session.sessionId, projectId: session.projectId)
     }
 
     static func sessionAction(_ action: String, session: GhostexRemoteSession) -> String {

@@ -183,6 +183,21 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func attachCommandIncludesProjectIdWhenAvailable() {
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "title": "Work",
+            "provider": "zmx",
+        ])!
+
+        let command = GhostexRemoteCommand.attach(session)
+
+        #expect(command.contains("ghostex attach --session-id"))
+        #expect(command.contains("--project-id"))
+    }
+
+    @Test
     func sessionActionIncludesProjectIdWhenAvailable() {
         let session = GhostexRemoteSession(json: [
             "sessionId": "s1",
