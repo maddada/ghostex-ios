@@ -127,7 +127,7 @@ struct GhostexSidebarSheet: View {
             }
             .alert(item: $detailSession) { session in
                 Alert(
-                    title: Text(session.title),
+                    title: Text(session.displayTitle),
                     message: Text(sessionDetailText(session)),
                     dismissButton: .default(Text("OK"))
                 )
@@ -355,7 +355,7 @@ private struct GhostexSessionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(session.title)
+                    Text(session.displayTitle)
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
 

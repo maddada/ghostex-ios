@@ -4,6 +4,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let sessionId: String
     let alias: String
     let title: String
+    let displayTitle: String
     let projectId: String
     let groupId: String
     let projectName: String
@@ -56,6 +57,9 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         Normalize provider-disabled sessions to `persistence-disabled`, not
         generic `disabled`, so the mobile contract names the exact capability
         that is off.
+
+        CDXC:GxserverSessionTitles 2026-06-07-09:33:
+        iOS displays gxserver's `displayTitle` and keeps raw `title` for rename/session commands. The mobile client must not recompute unsynced markers or placeholder titles from title provenance fields.
         */
         let jsonData = try sessionListJSONData(from: data)
 
@@ -83,6 +87,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
             Self.string(json["terminalTitle"]),
             "Terminal Session"
         )
+        displayTitle = Self.firstNonEmpty(Self.string(json["displayTitle"]), title)
         groupId = Self.string(json["groupId"])
         projectId = Self.firstNonEmpty(Self.string(json["projectId"]), groupId, Self.string(json["projectPath"]))
         projectName = Self.firstNonEmpty(Self.string(json["projectName"]), Self.string(json["groupTitle"]), "Project")

@@ -95,7 +95,7 @@ final class GhostexSidebarStore: ObservableObject {
             to: server,
             forceNew: true,
             startupCommand: startupCommand,
-            title: session.title,
+            title: session.displayTitle,
             skipTmuxLifecycle: true
         )
         sessionManager.selectedSessionId = attachSession.id
