@@ -46,7 +46,7 @@ final class TerminalRichPasteUIModel: ObservableObject {
                 case .info:
                     return .blue
                 case .success:
-                    return .green
+                    return .ghostexDoneAttentionStatus
                 case .warning:
                     return .orange
                 case .error:

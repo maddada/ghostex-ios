@@ -863,7 +863,7 @@ struct ServerFormSheet: View {
     private var connectionFooter: some View {
         if connectionTestSucceeded && hasValidConnectionTest {
             Label(String(localized: "Connection successful"), systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(Color.ghostexDoneAttentionStatus)
                 .font(.caption)
         } else if let connectionTestError {
             Text(connectionTestError)

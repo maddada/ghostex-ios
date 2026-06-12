@@ -367,7 +367,7 @@ struct ProUpgradeSheet: View {
             VStack(spacing: 16) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 56))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.ghostexDoneAttentionStatus)
 
                 Text("Welcome to Pro")
                     .font(.title3)

@@ -60,6 +60,9 @@ struct GhostexRemoteSession: Identifiable, Hashable {
 
         CDXC:GxserverSessionTitles 2026-06-07-09:33:
         iOS displays gxserver's `displayTitle` and keeps raw `title` for rename/session commands. The mobile client must not recompute unsynced markers or placeholder titles from title provenance fields.
+
+        CDXC:iOSRemoteSessions 2026-06-11-23:52:
+        iOS status refresh must require only SSH plus the remote gxserver-backed Ghostex CLI. `ghostex sessions --json` receives agent working/attention/idle state from gxserver list and presentation snapshot APIs, so the macOS app does not need to be running.
         */
         let jsonData = try sessionListJSONData(from: data)
 
@@ -441,6 +444,9 @@ enum GhostexRemoteCommand {
         /*
         CDXC:iOSRemoteSessions 2026-05-26-14:22:
         The VVTerm-based sidebar still talks to the Mac-hosted Ghostex CLI over SSH exec. Invoke commands through the user's zsh login environment so Homebrew and user-managed PATH entries resolve without reintroducing the old a-Shell command runner.
+
+        CDXC:iOSRemoteSessions 2026-06-11-23:52:
+        The Mac-hosted CLI is only the SSH entry point; session inventory and status must come from gxserver, not from a running macOS app or retired sidebar persistence bridge.
         */
         "/bin/zsh -lc \(shellQuote(command))"
     }

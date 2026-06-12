@@ -12,13 +12,21 @@ struct NoticeMetrics {
     static let blockingMaxWidth: CGFloat = 340
 }
 
+extension Color {
+    /*
+     CDXC:iOSStatusIndicators 2026-06-12-02:32:
+     Done, attention, and completion status surfaces use #95d7f6 instead of the prior bright green so iOS matches macOS and Android.
+     */
+    static let ghostexDoneAttentionStatus = Color(red: 0x95 / 255, green: 0xD7 / 255, blue: 0xF6 / 255)
+}
+
 extension NoticeLevel {
     var tintColor: Color {
         switch self {
         case .info:
             return .accentColor
         case .success:
-            return .green
+            return .ghostexDoneAttentionStatus
         case .warning:
             return .orange
         case .error:
@@ -39,4 +47,3 @@ extension NoticeLevel {
         }
     }
 }
-

@@ -178,7 +178,11 @@ struct GhostexSidebarSheet: View {
         } header: {
             Text("Machine")
         } footer: {
-            Text("Ghostex uses the selected VVTerm server and its Keychain credentials to run the Mac-hosted Ghostex CLI.")
+            /*
+            CDXC:iOSRemoteSessions 2026-06-11-23:52:
+            iOS should describe the status path as SSH to the Mac plus gxserver-backed CLI inventory. The macOS app does not need to stay open for session statuses.
+            */
+            Text("Ghostex uses the selected VVTerm server and its Keychain credentials to run the Mac-hosted Ghostex CLI against GX server.")
         }
     }
 
@@ -391,10 +395,15 @@ private struct GhostexSessionRow: View {
     }
 
     private var statusColor: Color {
-        switch session.status {
-        case "attention": return .orange
+        /*
+         CDXC:iOSGhostexSidebar 2026-06-12-02:32:
+         The rendered Ghostex row status comes from displayStatus, including normalized done and attention states. Done/attention must use #95d7f6 instead of bright green while working remains orange like the macOS and Android status indicators.
+         */
+        switch session.displayStatus {
+        case "attention", "done": return .ghostexDoneAttentionStatus
         case "sleep": return .secondary
-        case "working": return .green
+        case "working": return .orange
+        case "error": return .red
         default: return .primary
         }
     }
