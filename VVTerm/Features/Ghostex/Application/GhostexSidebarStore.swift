@@ -21,6 +21,11 @@ final class GhostexSidebarStore: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "GhostexSidebar")
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    /*
+    CDXC:iOSGhostexSidebar 2026-06-12-09:48:
+    Session refresh cancellation is expected when a new refresh, attach, or reuse action supersedes an in-flight list request. Track concurrent refreshes so a canceled older request cannot clear the spinner for a newer request, and keep cancellation out of user-facing errors.
+    */
+    private var activeRefreshCount = 0
 
     var projectGroups: [GhostexProjectGroup] {
         GhostexProjectGroup.groups(from: sessions)
@@ -236,24 +241,28 @@ final class GhostexSidebarStore: ObservableObject {
             return
         }
 
-        isRefreshing = true
+        beginRefresh()
+        defer { endRefresh() }
         lastError = nil
         appendLog("Refreshing Ghostex sessions from \(server.displayAddress).")
 
         do {
             let output = try await execute(GhostexRemoteCommand.sessionsList, on: server)
+            guard !Task.isCancelled else { return }
             let data = Data(output.utf8)
             let parsed = try GhostexRemoteSession.parseList(from: data)
             sessions = parsed
             selectedServerId = server.id
             appendLog("Refresh returned \(parsed.count) sessions.")
+        } catch is CancellationError {
+            return
+        } catch where Task.isCancelled {
+            return
         } catch {
             let message = error.localizedDescription
             lastError = message
             appendLog("Refresh failed: \(message)")
         }
-
-        isRefreshing = false
     }
 
     private func runRemote(
@@ -349,6 +358,16 @@ final class GhostexSidebarStore: ObservableObject {
             logs.removeFirst(logs.count - maxLogEntries)
         }
         UserDefaults.standard.set(logs, forKey: logsKey)
+    }
+
+    private func beginRefresh() {
+        activeRefreshCount += 1
+        isRefreshing = true
+    }
+
+    private func endRefresh() {
+        activeRefreshCount = max(0, activeRefreshCount - 1)
+        isRefreshing = activeRefreshCount > 0
     }
 
     private func persistSelectedServerId() {
