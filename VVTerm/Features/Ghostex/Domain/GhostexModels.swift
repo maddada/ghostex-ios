@@ -23,6 +23,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let providerSessionState: String
     let isLive: Bool
     let lastInteractionAt: String
+    let shouldSubmitStagedFirstPromptTitleCommand: Bool
 
     var id: String { sessionId }
     var displayStatus: String {
@@ -63,6 +64,9 @@ struct GhostexRemoteSession: Identifiable, Hashable {
 
         CDXC:iOSRemoteSessions 2026-06-11-23:52:
         iOS status refresh must require only SSH plus the remote gxserver-backed Ghostex CLI. `ghostex sessions --json` receives agent working/attention/idle state from gxserver list and presentation snapshot APIs, so the macOS app does not need to be running.
+
+        CDXC:GxserverSessionTitle 2026-06-23-08:40:
+        gxserver-rs owns first-prompt auto-name generation and staged rename text. iOS only parses the projected staged-command flag so the mobile SSH bridge can submit Enter when gxserver asks for it.
         */
         let jsonData = try sessionListJSONData(from: data)
 
@@ -137,6 +141,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         isLive = parsedIsLive
         isSleeping = legacySleeping && !parsedIsLive
         lastInteractionAt = Self.string(json["lastInteractionAt"])
+        shouldSubmitStagedFirstPromptTitleCommand = (json["shouldSubmitStagedFirstPromptTitleCommand"] as? Bool) ?? false
     }
 
     var isZmxBacked: Bool {
@@ -382,8 +387,14 @@ enum GhostexZmxViewportRefresh {
     /*
     CDXC:iOSGhostexSidebar 2026-05-28-20:59:
     ZMX-backed mobile attaches need Android's post-switch redraw OSC after VVTerm reports the current grid, otherwise the remote ZMX client can keep stale dimensions after the iOS tab becomes visible.
+
+    CDXC:iOSGhostexViewportRefresh 2026-06-22-05:48:
+    After a Ghostex ZMX attach is visible and has stayed ready for the two-second post-attach delay, iOS should send the same PageUp/PageDown nudge users apply manually, in addition to the private redraw OSC. Keep the raw OSC sequence separately testable so the Android/iOS ZMX contract stays stable.
     */
     static let sequence = "\u{001B}]1337;ZMX_REFRESH\u{0007}"
+    static let pageUpSequence = "\u{001B}[5~"
+    static let pageDownSequence = "\u{001B}[6~"
+    static let postAttachNudgeSequence = sequence + pageUpSequence + pageDownSequence
 }
 
 enum GhostexRemoteCommand {
@@ -426,6 +437,17 @@ enum GhostexRemoteCommand {
         var command = "ghostex create-session --json"
         if !project.projectId.isEmpty { command += " --project-id \(shellQuote(project.projectId))" }
         if !project.groupId.isEmpty { command += " --group-id \(shellQuote(project.groupId))" }
+        return loginShellCommand(command)
+    }
+
+    static func sendEnter(_ session: GhostexRemoteSession) -> String {
+        /*
+        CDXC:GxserverSessionTitle 2026-06-23-08:40:
+        iOS does not generate or stage first-prompt title commands. When gxserver-rs projects that the staged command is ready, route only the Enter submission through the Mac-hosted Ghostex CLI with project-scoped session identity.
+        */
+        var command = "ghostex send-enter --session-id \(shellQuote(session.sessionId))"
+        if !session.projectId.isEmpty { command += " --project-id \(shellQuote(session.projectId))" }
+        command += " --json"
         return loginShellCommand(command)
     }
 

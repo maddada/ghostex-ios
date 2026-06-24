@@ -785,10 +785,35 @@ extension TerminalAccessoryProfile {
         .system(.pageDown)
     ]
 
-    static let defaultActiveRows: [[TerminalAccessoryItemRef]] = [
+    private static let previousCtrlUDefaultActiveRows: [[TerminalAccessoryItemRef]] = [
         [
             .system(.escape),
             .system(.ctrlU),
+            .system(.ctrlJ),
+            .system(.home),
+            .system(.arrowUp),
+            .system(.end),
+            .system(.pageUp)
+        ],
+        [
+            .system(.tab),
+            .system(.controlModifier),
+            .system(.alternateModifier),
+            .system(.arrowLeft),
+            .system(.arrowDown),
+            .system(.arrowRight),
+            .system(.pageDown)
+        ]
+    ]
+
+    static let defaultActiveRows: [[TerminalAccessoryItemRef]] = [
+        /*
+        CDXC:iOSTerminalAccessories 2026-06-23-08:40:
+        The default mobile terminal toolbar should expose Shift in the old Ctrl-U slot so iOS and Android both provide a modifier key by default instead of a line-clear shortcut.
+        */
+        [
+            .system(.escape),
+            .system(.shiftModifier),
             .system(.ctrlJ),
             .system(.home),
             .system(.arrowUp),
@@ -882,29 +907,38 @@ extension TerminalAccessoryProfile {
         var seenItems = Set<TerminalAccessoryItemRef>()
         var normalizedRows: [[TerminalAccessoryItemRef]] = []
 
-        for rawRow in layout.activeRows.prefix(Self.rowCount) {
-            var normalizedRow: [TerminalAccessoryItemRef] = []
+        let activeRows = Array(layout.activeRows.prefix(Self.rowCount))
+        if activeRows == Self.previousCtrlUDefaultActiveRows {
+            /*
+            CDXC:iOSTerminalAccessories 2026-06-23-08:40:
+            Existing saved profiles may contain the old Ghostex default rows with Ctrl-U in slot two. Migrate only that exact default-shaped layout to Shift so customized accessory rows remain user-owned.
+            */
+            normalizedRows = Self.defaultActiveRows
+        } else {
+            for rawRow in activeRows {
+                var normalizedRow: [TerminalAccessoryItemRef] = []
 
-            for item in rawRow {
-                guard normalizedRow.count < Self.itemsPerRow else { break }
+                for item in rawRow {
+                    guard normalizedRow.count < Self.itemsPerRow else { break }
 
-                switch item {
-                case .system(let actionID):
-                    guard actionID != .unknown else { continue }
-                case .custom(let actionID):
-                    guard activeActionIDs.contains(actionID) else { continue }
+                    switch item {
+                    case .system(let actionID):
+                        guard actionID != .unknown else { continue }
+                    case .custom(let actionID):
+                        guard activeActionIDs.contains(actionID) else { continue }
+                    }
+
+                    guard !seenItems.contains(item) else { continue }
+                    seenItems.insert(item)
+                    normalizedRow.append(item)
                 }
 
-                guard !seenItems.contains(item) else { continue }
-                seenItems.insert(item)
-                normalizedRow.append(item)
+                normalizedRows.append(normalizedRow)
             }
 
-            normalizedRows.append(normalizedRow)
-        }
-
-        while normalizedRows.count < Self.rowCount {
-            normalizedRows.append([])
+            while normalizedRows.count < Self.rowCount {
+                normalizedRows.append([])
+            }
         }
 
         var normalizedItems = normalizedRows.flatMap { $0 }

@@ -7,7 +7,7 @@ struct GhostexSidebarTests {
     func parseSessionsAllowsLeadingCommandNoise() throws {
         let output = """
         warning: shell initialized
-        {"ok":true,"sessions":[{"sessionId":"s1","alias":"A","title":"Build","projectId":"p1","projectName":"App","projectPath":"/repo/app","status":"working","provider":"zmx","agent":"codex","agentIcon":"codex","providerSessionName":"zmx-a","attachCommand":"ghostex attach --session-id s1","isFocused":true}]}
+        {"ok":true,"sessions":[{"sessionId":"s1","alias":"A","title":"Build","projectId":"p1","projectName":"App","projectPath":"/repo/app","status":"working","provider":"zmx","agent":"codex","agentIcon":"codex","providerSessionName":"zmx-a","attachCommand":"ghostex attach --session-id s1","isFocused":true,"shouldSubmitStagedFirstPromptTitleCommand":true}]}
         """
 
         let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
@@ -16,6 +16,7 @@ struct GhostexSidebarTests {
         #expect(sessions[0].sessionId == "s1")
         #expect(sessions[0].projectName == "App")
         #expect(sessions[0].isFocused)
+        #expect(sessions[0].shouldSubmitStagedFirstPromptTitleCommand)
     }
 
     @Test
@@ -114,6 +115,40 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func zmxPostAttachNudgeIncludesPageUpAndPageDown() {
+        /*
+        CDXC:iOSGhostexViewportRefresh 2026-06-22-05:48:
+        After the visible-ready attach delay, iOS should send the private ZMX redraw OSC plus PageUp/PageDown so users do not need to press those keys manually to repair stale ZMX dimensions.
+        */
+        #expect(GhostexZmxViewportRefresh.postAttachNudgeSequence.hasPrefix(GhostexZmxViewportRefresh.sequence))
+        #expect(GhostexZmxViewportRefresh.pageUpSequence == "\u{001B}[5~")
+        #expect(GhostexZmxViewportRefresh.pageDownSequence == "\u{001B}[6~")
+        #expect(GhostexZmxViewportRefresh.postAttachNudgeSequence.hasSuffix("\u{001B}[5~\u{001B}[6~"))
+    }
+
+    @Test
+    func zmxViewportRefreshWaitsAfterVisibleAttachReadiness() {
+        let readyAt = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        let beforeReady = TerminalViewportRefreshTiming.remainingVisibleReadyDelay(
+            readySince: nil,
+            now: readyAt
+        )
+        let midDelay = TerminalViewportRefreshTiming.remainingVisibleReadyDelay(
+            readySince: readyAt,
+            now: readyAt.addingTimeInterval(1.25)
+        )
+        let afterDelay = TerminalViewportRefreshTiming.remainingVisibleReadyDelay(
+            readySince: readyAt,
+            now: readyAt.addingTimeInterval(2.1)
+        )
+
+        #expect(abs(beforeReady - 2) < 0.0001)
+        #expect(abs(midDelay - 0.75) < 0.0001)
+        #expect(afterDelay == 0)
+    }
+
+    @Test
     func parseSessionsScansPastBraceNoise() throws {
         let output = """
         profile loaded {not json}
@@ -209,6 +244,26 @@ struct GhostexSidebarTests {
         let command = GhostexRemoteCommand.sessionAction("sleep", session: session)
 
         #expect(command.contains("ghostex sleep --session-id"))
+        #expect(command.contains("--project-id"))
+        #expect(command.contains("--json"))
+    }
+
+    @Test
+    func sendEnterCommandIncludesProjectIdWhenAvailable() {
+        /*
+        CDXC:GxserverSessionTitle 2026-06-23-08:40:
+        iOS submits gxserver-staged first-prompt title commands through the same project-scoped Ghostex CLI identity used by other mobile remote session actions.
+        */
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "title": "Work",
+            "provider": "zmx",
+        ])!
+
+        let command = GhostexRemoteCommand.sendEnter(session)
+
+        #expect(command.contains("ghostex send-enter --session-id"))
         #expect(command.contains("--project-id"))
         #expect(command.contains("--json"))
     }

@@ -21,6 +21,7 @@ final class GhostexSidebarStore: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "GhostexSidebar")
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    private var submittedFirstPromptTitleCommandEnterKeys = Set<String>()
     /*
     CDXC:iOSGhostexSidebar 2026-06-12-09:48:
     Session refresh cancellation is expected when a new refresh, attach, or reuse action supersedes an in-flight list request. Track concurrent refreshes so a canceled older request cannot clear the spinner for a newer request, and keep cancellation out of user-facing errors.
@@ -254,6 +255,9 @@ final class GhostexSidebarStore: ObservableObject {
             sessions = parsed
             selectedServerId = server.id
             appendLog("Refresh returned \(parsed.count) sessions.")
+            Task { [weak self] in
+                await self?.submitStagedFirstPromptTitleCommands(from: parsed, on: server)
+            }
         } catch is CancellationError {
             return
         } catch where Task.isCancelled {
@@ -263,6 +267,28 @@ final class GhostexSidebarStore: ObservableObject {
             lastError = message
             appendLog("Refresh failed: \(message)")
         }
+    }
+
+    private func submitStagedFirstPromptTitleCommands(from parsed: [GhostexRemoteSession], on server: Server) async {
+        /*
+        CDXC:GxserverSessionTitle 2026-06-23-08:40:
+        iOS should mirror macOS first-prompt auto-naming without moving generation into the mobile app. When gxserver-rs marks a staged rename command ready, submit exactly one Enter per server/project/session over the existing SSH CLI bridge.
+        */
+        for session in parsed where session.shouldSubmitStagedFirstPromptTitleCommand {
+            let submitKey = firstPromptTitleCommandSubmitKey(server: server, session: session)
+            guard !submittedFirstPromptTitleCommandEnterKeys.contains(submitKey) else { continue }
+            submittedFirstPromptTitleCommandEnterKeys.insert(submitKey)
+            do {
+                _ = try await execute(GhostexRemoteCommand.sendEnter(session), on: server)
+                appendLog("Submitted staged first-prompt title command.")
+            } catch {
+                appendLog("Could not submit staged first-prompt title command: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func firstPromptTitleCommandSubmitKey(server: Server, session: GhostexRemoteSession) -> String {
+        "\(server.id.uuidString):\(session.projectId):\(session.sessionId)"
     }
 
     private func runRemote(
@@ -344,7 +370,7 @@ final class GhostexSidebarStore: ObservableObject {
         guard remoteSession.isZmxBacked else { return }
         sessionManager.scheduleTerminalViewportRefreshAfterSessionSwitch(
             sessionId: localSessionId,
-            redrawSequence: GhostexZmxViewportRefresh.sequence,
+            redrawSequence: GhostexZmxViewportRefresh.postAttachNudgeSequence,
             reason: reason
         )
     }

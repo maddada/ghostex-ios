@@ -8,6 +8,25 @@ import AppKit
 import UIKit
 #endif
 
+enum TerminalViewportRefreshTiming {
+    static let probeDelay: Duration = .milliseconds(250)
+    static let maxProbeAttempts = 6
+    static let postAttachVisibleReadyDelaySeconds: TimeInterval = 2
+
+    static func remainingVisibleReadyDelay(
+        readySince: Date?,
+        now: Date,
+        readyDelay: TimeInterval = postAttachVisibleReadyDelaySeconds
+    ) -> TimeInterval {
+        guard let readySince else { return readyDelay }
+        return max(0, readyDelay - now.timeIntervalSince(readySince))
+    }
+
+    static func sleepDuration(seconds: TimeInterval) -> Duration {
+        .milliseconds(Int64(max(0, (seconds * 1000).rounded(.up))))
+    }
+}
+
 @MainActor
 final class ConnectionSessionManager: ObservableObject {
     static let shared = ConnectionSessionManager()
@@ -20,6 +39,7 @@ final class ConnectionSessionManager: ObservableObject {
     private struct TerminalViewportRefreshRequest {
         let redrawSequence: String?
         let reason: String
+        var visibleReadySince: Date?
     }
 
     @Published var sessions: [ConnectionSession] = [] {
@@ -104,8 +124,8 @@ final class ConnectionSessionManager: ObservableObject {
     private var persistTask: Task<Void, Never>?
     private var isRestoring = false
 
-    private let terminalViewportRefreshDelay: Duration = .milliseconds(250)
-    private let terminalViewportRefreshMaxAttempts = 6
+    private let terminalViewportRefreshDelay = TerminalViewportRefreshTiming.probeDelay
+    private let terminalViewportRefreshMaxAttempts = TerminalViewportRefreshTiming.maxProbeAttempts
     private var pendingTerminalViewportRefreshes: [UUID: TerminalViewportRefreshRequest] = [:]
     private var terminalViewportRefreshTasks: [UUID: Task<Void, Never>] = [:]
 
@@ -935,34 +955,33 @@ final class ConnectionSessionManager: ObservableObject {
 
         CDXC:iOSGhostexViewportRefresh 2026-05-29-04:03:
         Simulator SSH attaches can take longer than Android's six 250 ms viewport-ready passes. Keep the refresh request pending until the selected Ghostty surface and registered SSH shell exist, then send the resize/redraw cycle once instead of letting the early retry window expire before connect finishes.
+
+        CDXC:iOSGhostexViewportRefresh 2026-06-22-05:27:
+        Remote ZMX attach refresh must wait until the selected iOS terminal view is onscreen and its command-backed Ghostex attach shell is registered, then hold that visible-ready state for about two seconds before sending the redraw sequence. This prevents the refresh from landing in the startup gap before the user can see the attached ZMX CLI.
         */
         pendingTerminalViewportRefreshes[sessionId] = TerminalViewportRefreshRequest(
             redrawSequence: redrawSequence,
-            reason: reason
+            reason: reason,
+            visibleReadySince: nil
         )
         scheduleTerminalViewportRefreshAfterSessionSwitch(
             sessionId: sessionId,
-            redrawSequence: redrawSequence,
-            reason: reason,
             attempt: 1
         )
     }
 
     private func scheduleTerminalViewportRefreshAfterSessionSwitch(
         sessionId: UUID,
-        redrawSequence: String?,
-        reason: String,
-        attempt: Int
+        attempt: Int,
+        delay: Duration? = nil
     ) {
-        let delay = terminalViewportRefreshDelay
+        let delay = delay ?? terminalViewportRefreshDelay
         terminalViewportRefreshTasks[sessionId]?.cancel()
         terminalViewportRefreshTasks[sessionId] = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             self?.refreshTerminalViewportAfterSessionSwitch(
                 sessionId: sessionId,
-                redrawSequence: redrawSequence,
-                reason: reason,
                 attempt: attempt
             )
         }
@@ -970,32 +989,55 @@ final class ConnectionSessionManager: ObservableObject {
 
     private func refreshTerminalViewportAfterSessionSwitch(
         sessionId: UUID,
-        redrawSequence: String?,
-        reason: String,
         attempt: Int
     ) {
+        guard var request = pendingTerminalViewportRefreshes[sessionId] else {
+            terminalViewportRefreshTasks.removeValue(forKey: sessionId)
+            return
+        }
         guard let session = sessionWithID(sessionId) else {
             pendingTerminalViewportRefreshes.removeValue(forKey: sessionId)
             terminalViewportRefreshTasks.removeValue(forKey: sessionId)
             return
         }
-        guard selectedSessionId == sessionId else { return }
+        guard selectedSessionId == sessionId else {
+            resetTerminalViewportRefreshReadiness(for: sessionId)
+            terminalViewportRefreshTasks.removeValue(forKey: sessionId)
+            return
+        }
 
         guard let terminal = terminalViews[sessionId],
-              terminal.window != nil,
+              isTerminalVisibleForViewportRefresh(terminal),
               let client = sshClient(for: session),
               let shellId = shellId(for: session) else {
+            resetTerminalViewportRefreshReadiness(for: sessionId)
             if attempt < terminalViewportRefreshMaxAttempts {
                 scheduleTerminalViewportRefreshAfterSessionSwitch(
                     sessionId: sessionId,
-                    redrawSequence: redrawSequence,
-                    reason: reason,
                     attempt: attempt + 1
                 )
             } else {
                 terminalViewportRefreshTasks.removeValue(forKey: sessionId)
-                logger.info("Terminal viewport refresh is waiting for a ready terminal shell for \(sessionId.uuidString, privacy: .public): \(reason, privacy: .public)")
+                logger.info("Terminal viewport refresh is waiting for a ready terminal shell for \(sessionId.uuidString, privacy: .public): \(request.reason, privacy: .public)")
             }
+            return
+        }
+
+        let now = Date()
+        let remainingReadyDelay = TerminalViewportRefreshTiming.remainingVisibleReadyDelay(
+            readySince: request.visibleReadySince,
+            now: now
+        )
+        if remainingReadyDelay > 0 {
+            if request.visibleReadySince == nil {
+                request.visibleReadySince = now
+                pendingTerminalViewportRefreshes[sessionId] = request
+            }
+            scheduleTerminalViewportRefreshAfterSessionSwitch(
+                sessionId: sessionId,
+                attempt: attempt,
+                delay: TerminalViewportRefreshTiming.sleepDuration(seconds: remainingReadyDelay)
+            )
             return
         }
 
@@ -1013,7 +1055,8 @@ final class ConnectionSessionManager: ObservableObject {
         let cols = Int(size.columns)
         let rows = Int(size.rows)
         guard cols > 0, rows > 0 else { return }
-        let redrawData = redrawSequence?.data(using: .utf8)
+        let redrawData = request.redrawSequence?.data(using: .utf8)
+        let reason = request.reason
         let logger = logger
 
         Task {
@@ -1029,15 +1072,34 @@ final class ConnectionSessionManager: ObservableObject {
         }
     }
 
+    private func resetTerminalViewportRefreshReadiness(for sessionId: UUID) {
+        guard var request = pendingTerminalViewportRefreshes[sessionId] else { return }
+        request.visibleReadySince = nil
+        pendingTerminalViewportRefreshes[sessionId] = request
+    }
+
+    private func isTerminalVisibleForViewportRefresh(_ terminal: GhosttyTerminalView) -> Bool {
+        guard terminal.window != nil,
+              !terminal.isHidden,
+              terminal.bounds.width > 0,
+              terminal.bounds.height > 0 else {
+            return false
+        }
+
+        #if os(iOS)
+        return terminal.alpha > 0
+        #else
+        return terminal.alphaValue > 0
+        #endif
+    }
+
     private func resumePendingTerminalViewportRefreshIfNeeded(for sessionId: UUID) {
-        guard let pending = pendingTerminalViewportRefreshes[sessionId],
+        guard pendingTerminalViewportRefreshes[sessionId] != nil,
               selectedSessionId == sessionId else {
             return
         }
         scheduleTerminalViewportRefreshAfterSessionSwitch(
             sessionId: sessionId,
-            redrawSequence: pending.redrawSequence,
-            reason: pending.reason,
             attempt: 1
         )
     }
