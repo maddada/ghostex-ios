@@ -34,3 +34,29 @@ enum TmuxStartupBehavior: String, Codable, CaseIterable, Identifiable {
         }
     }
 }
+
+enum TmuxPersistenceDefaults {
+    static let enabledKey = "terminalTmuxEnabledDefault"
+    static let startupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
+
+    /*
+    CDXC:iOSSessionPersistence 2026-06-28-16:22:
+    iOS tmux persistence is opt-in. Unset global preferences and new server forms must resolve tmux disabled so first connections use a normal SSH shell and do not show tmux attach or install prompts by default.
+    */
+    static let enabledDefault = false
+    static let startupBehaviorDefault = TmuxStartupBehavior.askEveryTime
+
+    static func resolvedEnabled(defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: enabledKey) != nil else {
+            return enabledDefault
+        }
+        return defaults.bool(forKey: enabledKey)
+    }
+
+    static func resolvedStartupBehavior(defaults: UserDefaults = .standard) -> TmuxStartupBehavior {
+        guard let rawValue = defaults.string(forKey: startupBehaviorKey) else {
+            return startupBehaviorDefault
+        }
+        return TmuxStartupBehavior(rawValue: rawValue) ?? startupBehaviorDefault
+    }
+}

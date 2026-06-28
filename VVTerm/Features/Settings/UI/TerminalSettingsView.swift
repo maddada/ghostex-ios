@@ -44,8 +44,8 @@ struct TerminalSettingsView: View {
     @AppStorage("terminalProgressEnabled") private var terminalProgressEnabled = true
     @AppStorage("terminalAccessoryCustomizationEnabled") private var terminalAccessoryCustomizationEnabled = true
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var terminalKeyboardDismissButtonEnabled = true
-    @AppStorage("terminalTmuxEnabledDefault") private var tmuxEnabledDefault = true
-    @AppStorage("terminalTmuxStartupBehaviorDefault") private var tmuxStartupBehaviorDefaultRaw = TmuxStartupBehavior.askEveryTime.rawValue
+    @AppStorage(TmuxPersistenceDefaults.enabledKey) private var tmuxEnabledDefault = TmuxPersistenceDefaults.enabledDefault
+    @AppStorage(TmuxPersistenceDefaults.startupBehaviorKey) private var tmuxStartupBehaviorDefaultRaw = TmuxPersistenceDefaults.startupBehaviorDefault.rawValue
 
     // Copy settings
     @AppStorage("terminalCopyTrimTrailingWhitespace") private var copyTrimTrailingWhitespace = true

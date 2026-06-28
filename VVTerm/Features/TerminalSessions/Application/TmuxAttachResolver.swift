@@ -18,19 +18,11 @@ final class TmuxAttachResolver {
     // MARK: - Settings
 
     var tmuxEnabledDefault: Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: "terminalTmuxEnabledDefault") == nil {
-            return true
-        }
-        return defaults.bool(forKey: "terminalTmuxEnabledDefault")
+        TmuxPersistenceDefaults.resolvedEnabled()
     }
 
     var tmuxStartupBehaviorDefault: TmuxStartupBehavior {
-        let defaults = UserDefaults.standard
-        guard let rawValue = defaults.string(forKey: "terminalTmuxStartupBehaviorDefault") else {
-            return .askEveryTime
-        }
-        return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
+        TmuxPersistenceDefaults.resolvedStartupBehavior()
     }
 
     func isTmuxEnabled(for serverId: UUID) -> Bool {

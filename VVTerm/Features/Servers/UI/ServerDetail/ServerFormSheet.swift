@@ -142,8 +142,8 @@ struct ServerFormSheet: View {
     @State private var selectedEnvironment: ServerEnvironment = .production
     @State private var notes: String = ""
     @State private var requiresBiometricUnlock: Bool = false
-    @State private var tmuxEnabled: Bool = true
-    @State private var tmuxStartupBehavior: TmuxStartupBehavior = .vvtermManaged
+    @State private var tmuxEnabled: Bool = TmuxPersistenceDefaults.enabledDefault
+    @State private var tmuxStartupBehavior: TmuxStartupBehavior = TmuxPersistenceDefaults.startupBehaviorDefault
 
     @State private var showingServerLimitAlert = false
     @State private var showingCreateWorkspace = false
@@ -1027,19 +1027,11 @@ struct ServerFormSheet: View {
     }
 
     private static func defaultTmuxEnabled() -> Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: "terminalTmuxEnabledDefault") == nil {
-            return true
-        }
-        return defaults.bool(forKey: "terminalTmuxEnabledDefault")
+        TmuxPersistenceDefaults.resolvedEnabled()
     }
 
     private static func defaultTmuxStartupBehavior() -> TmuxStartupBehavior {
-        let defaults = UserDefaults.standard
-        guard let rawValue = defaults.string(forKey: "terminalTmuxStartupBehaviorDefault") else {
-            return .askEveryTime
-        }
-        return TmuxStartupBehavior(rawValue: rawValue) ?? .askEveryTime
+        TmuxPersistenceDefaults.resolvedStartupBehavior()
     }
 
     private func buildCredentials(for serverId: UUID) -> ServerCredentials {
