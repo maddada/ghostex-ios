@@ -60,10 +60,43 @@ struct RemoteMoshManagerTests {
     func utf8LocaleExportScriptSetsUtf8LocaleVars() {
         let script = RemoteMoshManager.shared.utf8LocaleExportScript()
         #expect(script.contains("locale -a"))
+        #expect(script.contains("locale charmap"))
         #expect(script.contains("C.UTF-8"))
+        #expect(script.contains("vvterm_validate_utf8_locale"))
+        #expect(script.contains("[Uu][Tt][Ff]*8"))
+        #expect(script.contains("VVTERM_LOCALE_CANDIDATE"))
+        #expect(script.contains("awk") == false)
+        #expect(script.contains("IGNORECASE") == false)
         #expect(script.contains("export LANG="))
         #expect(script.contains("export LC_ALL="))
         #expect(script.contains("export LC_CTYPE="))
+    }
+
+    @Test
+    func moshChildStartupScriptAlsoSetsUtf8Locale() {
+        let script = RemoteMoshManager.shared.moshChildStartupScript(
+            startCommand: "echo hi",
+            terminalType: .xtermGhostty
+        )
+
+        #expect(script.contains("VVTERM_UTF8_LOCALE"))
+        #expect(script.contains("TERM='xterm-ghostty'"))
+        #expect(script.contains("echo hi"))
+    }
+
+    @Test
+    func localeBootstrapErrorMessageIsSpecific() {
+        let error = RemoteMoshManager.shared.mapInvalidConnectLine(
+            output: "mosh-server needs a UTF-8 native locale to run."
+        )
+
+        switch error {
+        case .moshBootstrapFailed(let message):
+            #expect(message.contains("UTF-8 locale"))
+            #expect(message.contains("mosh-server needs a UTF-8 native locale"))
+        default:
+            Issue.record("Expected moshBootstrapFailed for invalid connect line")
+        }
     }
 
     @Test

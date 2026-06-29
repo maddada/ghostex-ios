@@ -97,6 +97,7 @@ struct EnvironmentFormSheet: View {
             }
             .frame(minWidth: 360, minHeight: 320)
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private func saveEnvironment() {

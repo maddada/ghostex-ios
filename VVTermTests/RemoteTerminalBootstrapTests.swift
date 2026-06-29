@@ -16,6 +16,13 @@ struct RemoteTerminalBootstrapTests {
         powerShellExecutable: "powershell"
     )
 
+    private let pwshEnvironment = RemoteEnvironment(
+        platform: .windows,
+        shellProfile: .powershell(executableName: "pwsh"),
+        activeShellName: "pwsh",
+        powerShellExecutable: "pwsh"
+    )
+
     private let cmdEnvironment = RemoteEnvironment(
         platform: .windows,
         shellProfile: .cmd,
@@ -76,6 +83,18 @@ struct RemoteTerminalBootstrapTests {
     }
 
     @Test
+    func launchPlanWithStartupCommandKeepsPwshExecutable() {
+        let plan = RemoteTerminalBootstrap.launchPlan(startupCommand: "Write-Output 'hi'", environment: pwshEnvironment)
+
+        switch plan {
+        case .shell:
+            Issue.record("Expected exec launch when a pwsh startup command is provided")
+        case .exec(let command):
+            #expect(command.hasPrefix("pwsh -NoLogo -NoProfile -EncodedCommand "))
+        }
+    }
+
+    @Test
     func directoryChangeCommandUsesPOSIXCdForUnixPaths() {
         let command = RemoteTerminalBootstrap.directoryChangeCommand(for: "/var/www/app's", environment: posixEnvironment)
 
@@ -86,14 +105,14 @@ struct RemoteTerminalBootstrapTests {
     func directoryChangeCommandUsesPowerShellForWindowsPaths() {
         let command = RemoteTerminalBootstrap.directoryChangeCommand(for: #"C:\Users\O'Hara\repo"#, environment: powerShellEnvironment)
 
-        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\O''Hara\\repo'\n")
+        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\O''Hara\\repo'\r\n")
     }
 
     @Test
     func directoryChangeCommandNormalizesOSCStyleWindowsPaths() {
         let command = RemoteTerminalBootstrap.directoryChangeCommand(for: "/C:/Users/test/project", environment: powerShellEnvironment)
 
-        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\test\\project'\n")
+        #expect(command == "Set-Location -LiteralPath 'C:\\Users\\test\\project'\r\n")
     }
 
     @Test

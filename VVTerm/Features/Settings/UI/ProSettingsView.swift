@@ -51,7 +51,7 @@ struct ProSettingsView: View {
                     HStack {
                         Text("Servers")
                         Spacer()
-                        Text(String(format: String(localized: "%lld of %lld used"), Int64(serverManager.servers.count), Int64(FreeTierLimits.maxServers)))
+                        Text(String(format: String(localized: "%lld of %lld used"), Int64(serverManager.servers.count), Int64(serverManager.freeServerLimit)))
                             .foregroundStyle(.secondary)
                     }
 
@@ -116,7 +116,7 @@ struct ProSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .proUpgradePresentation(isPresented: $showingPlans)
+        .proUpgradePresentation(isPresented: $showingPlans, source: .settings)
         #if os(iOS)
         .manageSubscriptionsSheetCompat(
             isPresented: $showingManageSubscription,

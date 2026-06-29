@@ -13,6 +13,16 @@ import SwiftUI
 import IOSurface
 import QuartzCore
 
+struct TerminalContextMenuActions {
+    let focus: () -> Void
+    let splitRight: () -> Void
+    let splitLeft: () -> Void
+    let splitDown: () -> Void
+    let splitUp: () -> Void
+    let currentTitle: () -> String
+    let setTitle: (String?) -> Void
+}
+
 /// NSView that embeds a Ghostty terminal surface with Metal rendering
 ///
 /// This view handles:
@@ -51,10 +61,20 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     /// Callback when terminal size changes (cols, rows) - used for SSH PTY resize
     var onResize: ((Int, Int) -> Void)?
 
+    /// Callback invoked when a magnification gesture requests terminal pane zoom.
+    var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
+
+    /// Per-surface presentation overrides used to preserve pane zoom across global config reloads.
+    private(set) var surfacePresentationOverrides: TerminalPresentationOverrides = .empty
+
     /// Optional app-level paste interceptor used for rich clipboard routing.
     var richPasteInterceptor: ((GhosttyTerminalView) -> Bool)?
 
+    /// Optional pane/session actions exposed in the macOS contextual menu.
+    var terminalContextMenuActions: TerminalContextMenuActions?
+
     private var didSignalReady = false
+    private var readonly = false
 
     /// Cell size in points for row-to-pixel conversion (used by scroll view)
     var cellSize: NSSize = .zero
@@ -68,6 +88,9 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
     private var displayLink: CVDisplayLink?
     private var needsRender = false
+    private var accumulatedMagnification: CGFloat = 0
+    private let zoomIndicatorView = TerminalZoomIndicatorView()
+    private var zoomIndicatorHideWorkItem: DispatchWorkItem?
 
     /// Idle detection for display link - stops after timeout to save CPU
     private var lastActivityTime: CFAbsoluteTime = 0
@@ -103,6 +126,8 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     /// Call this when closing a session to ensure proper cleanup.
     func cleanup() {
         isShuttingDown = true
+        zoomIndicatorHideWorkItem?.cancel()
+        zoomIndicatorHideWorkItem = nil
 
         // Stop display link first
         stopDisplayLink()
@@ -121,6 +146,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         onProgressReport = nil
         onResize = nil
         richPasteInterceptor = nil
+        terminalContextMenuActions = nil
         writeCallback = nil
 
         // Stop rendering/input callbacks
@@ -175,6 +201,9 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         setupAppearanceObservation()
         setupFrameObservation()
         setupConfigReloadObservation()
+        zoomIndicatorView.isHidden = true
+        zoomIndicatorView.alphaValue = 0
+        addSubview(zoomIndicatorView)
         if useCustomIO {
             setupDisplayLink()
         }
@@ -244,7 +273,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
         // Register surface with app wrapper for config update tracking
         if let wrapper = ghosttyAppWrapper {
-            self.surfaceReference = wrapper.registerSurface(cSurface)
+            self.surfaceReference = wrapper.registerSurface(cSurface, terminalView: self)
         }
     }
 
@@ -478,6 +507,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
             didSignalReady = true
             onReady?()
         }
+        updateZoomIndicatorLayout()
 
         // Check for terminal size changes and notify via callback (for SSH PTY resize)
         if didUpdate, let size = terminalSize() {
@@ -568,6 +598,11 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
             return ghostty_surface_has_selection(cSurface)
         case #selector(paste(_:)):
             return true
+        case #selector(toggleReadonly(_:)):
+            if let item = item as? NSMenuItem {
+                item.state = readonly ? .on : .off
+            }
+            return true
         default:
             return true
         }
@@ -578,7 +613,167 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     @objc func paste(_ sender: Any?) {
+        focusContextMenuTarget()
         performPasteAction()
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        switch event.type {
+        case .rightMouseDown:
+            break
+        case .leftMouseDown:
+            guard event.modifierFlags.contains(.control) else { return nil }
+            guard surface?.mouseCaptured != true else { return nil }
+            _ = inputHandler.handleRightMouseDown(with: event)
+        default:
+            return nil
+        }
+
+        focusContextMenuTarget()
+        return makeTerminalContextMenu()
+    }
+
+    func updateReadonlyState(_ isReadonly: Bool) {
+        readonly = isReadonly
+    }
+
+    private func makeTerminalContextMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        if hasSelection {
+            menu.addItem(makeMenuItem(title: String(localized: "Copy"), action: #selector(copy(_:))))
+        }
+        menu.addItem(makeMenuItem(title: String(localized: "Paste"), action: #selector(paste(_:))))
+
+        if terminalContextMenuActions != nil {
+            menu.addItem(.separator())
+            menu.addItem(makeMenuItem(
+                title: String(localized: "Split Right"),
+                action: #selector(splitRight(_:)),
+                systemImage: "rectangle.righthalf.inset.filled"
+            ))
+            menu.addItem(makeMenuItem(
+                title: String(localized: "Split Left"),
+                action: #selector(splitLeft(_:)),
+                systemImage: "rectangle.leadinghalf.inset.filled"
+            ))
+            menu.addItem(makeMenuItem(
+                title: String(localized: "Split Down"),
+                action: #selector(splitDown(_:)),
+                systemImage: "rectangle.bottomhalf.inset.filled"
+            ))
+            menu.addItem(makeMenuItem(
+                title: String(localized: "Split Up"),
+                action: #selector(splitUp(_:)),
+                systemImage: "rectangle.tophalf.inset.filled"
+            ))
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(makeMenuItem(
+            title: String(localized: "Reset Terminal"),
+            action: #selector(resetTerminal(_:)),
+            systemImage: "arrow.trianglehead.2.clockwise"
+        ))
+        let readonlyItem = makeMenuItem(
+            title: String(localized: "Terminal Read-only"),
+            action: #selector(toggleReadonly(_:)),
+            systemImage: "eye.fill"
+        )
+        readonlyItem.state = readonly ? .on : .off
+        menu.addItem(readonlyItem)
+
+        if terminalContextMenuActions != nil {
+            menu.addItem(.separator())
+            menu.addItem(makeMenuItem(
+                title: String(localized: "Change Terminal Title..."),
+                action: #selector(changeTerminalTitle(_:))
+            ))
+        }
+
+        return menu
+    }
+
+    private var hasSelection: Bool {
+        guard let cSurface = surface?.unsafeCValue else { return false }
+        return ghostty_surface_has_selection(cSurface)
+    }
+
+    private func makeMenuItem(title: String, action: Selector, systemImage: String? = nil) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.isEnabled = true
+        if let systemImage {
+            item.image = NSImage(systemSymbolName: systemImage, accessibilityDescription: title)
+        }
+        return item
+    }
+
+    private func focusContextMenuTarget() {
+        window?.makeFirstResponder(self)
+        terminalContextMenuActions?.focus()
+    }
+
+    @objc private func splitRight(_ sender: Any?) {
+        focusContextMenuTarget()
+        terminalContextMenuActions?.splitRight()
+    }
+
+    @objc private func splitLeft(_ sender: Any?) {
+        focusContextMenuTarget()
+        terminalContextMenuActions?.splitLeft()
+    }
+
+    @objc private func splitDown(_ sender: Any?) {
+        focusContextMenuTarget()
+        terminalContextMenuActions?.splitDown()
+    }
+
+    @objc private func splitUp(_ sender: Any?) {
+        focusContextMenuTarget()
+        terminalContextMenuActions?.splitUp()
+    }
+
+    @objc private func resetTerminal(_ sender: Any?) {
+        focusContextMenuTarget()
+        resetTerminalForReconnect()
+    }
+
+    @objc private func toggleReadonly(_ sender: Any?) {
+        focusContextMenuTarget()
+        if surface?.perform(action: "toggle_readonly") == true {
+            readonly.toggle()
+        }
+    }
+
+    @objc private func changeTerminalTitle(_ sender: Any?) {
+        guard let terminalContextMenuActions else { return }
+        focusContextMenuTarget()
+
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Change Terminal Title")
+        alert.informativeText = String(localized: "Leave blank to restore the default.")
+        alert.alertStyle = .informational
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        textField.stringValue = terminalContextMenuActions.currentTitle()
+        alert.accessoryView = textField
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.window.initialFirstResponder = textField
+
+        let completionHandler: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let title = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            terminalContextMenuActions.setTitle(title.isEmpty ? nil : title)
+        }
+
+        if let window {
+            alert.beginSheetModal(for: window, completionHandler: completionHandler)
+        } else {
+            completionHandler(alert.runModal())
+        }
     }
 
     // MARK: - Mouse Input
@@ -592,11 +787,17 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        inputHandler.handleRightMouseDown(with: event)
+        if inputHandler.handleRightMouseDown(with: event) {
+            return
+        }
+        super.rightMouseDown(with: event)
     }
 
     override func rightMouseUp(with event: NSEvent) {
-        inputHandler.handleRightMouseUp(with: event)
+        if inputHandler.handleRightMouseUp(with: event) {
+            return
+        }
+        super.rightMouseUp(with: event)
     }
 
     override func otherMouseDown(with event: NSEvent) {
@@ -638,6 +839,72 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
 
     override func scrollWheel(with event: NSEvent) {
         inputHandler.handleScrollWheel(with: event)
+    }
+
+    override func magnify(with event: NSEvent) {
+        accumulatedMagnification += event.magnification
+
+        if accumulatedMagnification >= CGFloat(TerminalZoomPresentation.magnificationStepThreshold) {
+            if let result = onZoomAction?(.zoomIn) {
+                showZoomIndicator(fontSize: result.effectiveFontSize)
+            }
+            accumulatedMagnification = 0
+        } else if accumulatedMagnification <= -CGFloat(TerminalZoomPresentation.magnificationStepThreshold) {
+            if let result = onZoomAction?(.zoomOut) {
+                showZoomIndicator(fontSize: result.effectiveFontSize)
+            }
+            accumulatedMagnification = 0
+        }
+
+        if event.phase == .ended || event.phase == .cancelled {
+            accumulatedMagnification = 0
+            scheduleZoomIndicatorHide(after: TerminalZoomPresentation.indicatorGestureEndHideDelay)
+        }
+    }
+
+    private func showZoomIndicator() {
+        showZoomIndicator(fontSize: surfacePresentationOverrides.resolvedFontSize())
+    }
+
+    private func showZoomIndicator(fontSize: Double) {
+        zoomIndicatorView.update(fontSize: fontSize)
+        updateZoomIndicatorLayout()
+        addSubview(zoomIndicatorView, positioned: .above, relativeTo: nil)
+
+        zoomIndicatorHideWorkItem?.cancel()
+        zoomIndicatorView.isHidden = false
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = TerminalZoomPresentation.indicatorFadeInDuration
+            zoomIndicatorView.animator().alphaValue = 1
+        }
+        scheduleZoomIndicatorHide(after: TerminalZoomPresentation.indicatorHideDelay)
+    }
+
+    private func scheduleZoomIndicatorHide(after delay: TimeInterval) {
+        zoomIndicatorHideWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = TerminalZoomPresentation.indicatorFadeOutDuration
+                self.zoomIndicatorView.animator().alphaValue = 0
+            }, completionHandler: {
+                self.zoomIndicatorView.isHidden = true
+            })
+        }
+        zoomIndicatorHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func updateZoomIndicatorLayout() {
+        let fittingSize = zoomIndicatorView.fittingSize
+        let width = max(fittingSize.width, CGFloat(TerminalZoomPresentation.indicatorMinimumWidth))
+        let height = max(fittingSize.height, CGFloat(TerminalZoomPresentation.indicatorMinimumHeight))
+        zoomIndicatorView.frame = NSRect(
+            x: bounds.midX - width / 2,
+            y: bounds.midY - height / 2,
+            width: width,
+            height: height
+        )
     }
 
     // MARK: - Process Lifecycle
@@ -687,6 +954,14 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         needsDisplay = true
         needsLayout = true
         displayIfNeeded()
+    }
+
+    func applyPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides) {
+        surfacePresentationOverrides = presentationOverrides
+
+        guard let surface = surface?.unsafeCValue else { return }
+        ghosttyAppWrapper?.updateSurfaceConfig(surface, presentationOverrides: presentationOverrides)
+        forceRefresh()
     }
 
     /// Reset Ghostty's terminal state before binding a fresh remote shell to a reused surface.
@@ -829,6 +1104,67 @@ private final class DisplayLinkCallbackContext: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return weakViewTable.allObjects.first
+    }
+}
+
+private final class TerminalZoomIndicatorView: NSVisualEffectView {
+    private let valueLabel = NSTextField(labelWithString: "")
+    private let titleLabel = NSTextField(labelWithString: TerminalZoomPresentation.indicatorTitle)
+    private let stackView = NSStackView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        material = .hudWindow
+        blendingMode = .withinWindow
+        state = .active
+        wantsLayer = true
+        layer?.cornerRadius = 18
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
+
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 24, weight: .semibold)
+        valueLabel.textColor = .white
+        valueLabel.alignment = .center
+
+        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.textColor = NSColor.white.withAlphaComponent(0.72)
+        titleLabel.alignment = .center
+
+        stackView.orientation = .vertical
+        stackView.alignment = .centerX
+        stackView.spacing = 3
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(valueLabel)
+        stackView.addArrangedSubview(titleLabel)
+        addSubview(stackView)
+
+        // Padding constraints are non-required so they break silently while the
+        // view still has a zero-size autoresizing frame (before it's shown),
+        // instead of logging "unable to satisfy" conflicts. They hold normally
+        // once the view is sized.
+        let padding = [
+            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 18),
+            stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -18),
+            stackView.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 12),
+            stackView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -12)
+        ]
+        padding.forEach { $0.priority = NSLayoutConstraint.Priority(999) }
+        NSLayoutConstraint.activate(padding + [
+            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    func update(fontSize: Double) {
+        valueLabel.stringValue = TerminalZoomPresentation.formattedFontSize(fontSize)
     }
 }
 

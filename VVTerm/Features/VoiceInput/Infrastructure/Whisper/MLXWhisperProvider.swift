@@ -12,6 +12,7 @@ final class MLXWhisperProvider {
     func transcribe(samples: [Float]) async throws -> String {
         #if arch(arm64)
         let modelId = TranscriptionSettingsStore.currentWhisperModelId()
+        let requestedLanguage = Self.requestedLanguage(for: TranscriptionSettingsStore.currentLanguageCode())
         let modelDirectory = await MainActor.run {
             MLXModelManager.modelDirectory(for: .whisper, modelId: modelId)
         }
@@ -19,18 +20,28 @@ final class MLXWhisperProvider {
             guard !samples.isEmpty else { return "" }
 
             let model = try WhisperModelLoader.shared.loadModel(at: modelDirectory)
-            let tokenizer = try WhisperTokenizer(
-                multilingual: model.isMultilingual,
-                language: "en",
-                task: "transcribe",
-                modelId: modelId
-            )
 
             let mel = try WhisperAudioProcessor.logMelSpectrogram(samples, nMels: model.dims.n_mels, padding: WhisperAudioConstants.nSamples)
             let melSegment = WhisperAudioProcessor.padOrTrim(mel, length: WhisperAudioConstants.nFrames, axis: 0).asType(.float16)
             let melBatch = melSegment.reshaped(1, melSegment.dim(0), melSegment.dim(1))
 
             let audioFeatures = model.encoder(melBatch)
+
+            let language: String?
+            if model.isMultilingual {
+                language = requestedLanguage
+                    ?? Self.detectLanguage(model: model, audioFeatures: audioFeatures, modelId: modelId)
+                    ?? "en"
+            } else {
+                language = nil
+            }
+
+            let tokenizer = try WhisperTokenizer(
+                multilingual: model.isMultilingual,
+                language: language,
+                task: "transcribe",
+                modelId: modelId
+            )
 
             let promptTokens = tokenizer.initialTokens(withoutTimestamps: true)
             var allTokens = promptTokens
@@ -59,12 +70,40 @@ final class MLXWhisperProvider {
         #endif
     }
 
+    private static func requestedLanguage(for languageCode: String) -> String? {
+        guard languageCode != TranscriptionSettingsDefaults.autoLanguageCode else { return nil }
+        return WhisperTokenizer.supportedLanguages.contains(languageCode) ? languageCode : nil
+    }
+
     #if arch(arm64)
     nonisolated private static func argmaxToken(from logits: MLXArray) throws -> Int {
         let lastIndex = logits.dim(1) - 1
         let lastLogits = logits[0, lastIndex]
         let tokenArray = argMax(lastLogits, axis: -1)
         return tokenArray.item(Int.self)
+    }
+
+    /// Whisper language identification: decode one step from `<|startoftranscript|>` and
+    /// pick the highest-scoring language token.
+    nonisolated private static func detectLanguage(model: WhisperModel, audioFeatures: MLXArray, modelId: String) -> String? {
+        guard let tokenizer = try? WhisperTokenizer(
+            multilingual: true,
+            language: nil,
+            task: nil,
+            modelId: modelId
+        ) else { return nil }
+
+        let sot = tokenizer.sot
+        let languageCount = min(tokenizer.numLanguages, WhisperTokenizer.supportedLanguages.count)
+        guard languageCount > 0 else { return nil }
+
+        let promptArray = MLXArray([sot], [1, 1])
+        let (logits, _) = model.decoder(promptArray, audioFeatures: audioFeatures, kvCache: nil)
+        let lastLogits = logits[0, logits.dim(1) - 1]
+        let languageLogits = lastLogits[(sot + 1) ..< (sot + 1 + languageCount)]
+        let index = argMax(languageLogits, axis: -1).item(Int.self)
+        guard index >= 0, index < languageCount else { return nil }
+        return WhisperTokenizer.supportedLanguages[index]
     }
     #endif
 }

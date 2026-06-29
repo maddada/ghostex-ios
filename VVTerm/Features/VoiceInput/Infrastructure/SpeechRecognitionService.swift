@@ -9,21 +9,75 @@ class SpeechRecognitionService: ObservableObject {
     @Published var partialTranscription = ""
 
     private var speechRecognizer: SFSpeechRecognizer?
+    private var recognizerLanguageCode: String?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
 
-    init() {
-        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    var isAvailable: Bool {
+        resolvedRecognizer()?.isAvailable ?? false
     }
 
-    var isAvailable: Bool {
-        speechRecognizer?.isAvailable ?? false
+    // MARK: - Recognizer Resolution
+
+    private static let preferredLocaleIdentifiers: [String: String] = [
+        "en": "en-US",
+        "es": "es-ES",
+        "fr": "fr-FR",
+        "de": "de-DE",
+        "ja": "ja-JP",
+        "zh": "zh-CN",
+        "ko": "ko-KR",
+        "pt": "pt-BR",
+        "ru": "ru-RU"
+    ]
+
+    private func resolvedRecognizer() -> SFSpeechRecognizer? {
+        let languageCode = TranscriptionSettingsStore.currentLanguageCode()
+        if let speechRecognizer, recognizerLanguageCode == languageCode {
+            return speechRecognizer
+        }
+        let recognizer = Self.makeRecognizer(languageCode: languageCode)
+        speechRecognizer = recognizer
+        recognizerLanguageCode = languageCode
+        return recognizer
+    }
+
+    private static func makeRecognizer(languageCode: String) -> SFSpeechRecognizer? {
+        for locale in candidateLocales(languageCode: languageCode) {
+            if let recognizer = SFSpeechRecognizer(locale: locale) {
+                return recognizer
+            }
+        }
+        return SFSpeechRecognizer()
+    }
+
+    private static func candidateLocales(languageCode: String) -> [Locale] {
+        guard languageCode != TranscriptionSettingsDefaults.autoLanguageCode else {
+            return [Locale.current]
+        }
+
+        var identifiers: [String] = []
+        if let preferred = preferredLocaleIdentifiers[languageCode] {
+            identifiers.append(preferred)
+        }
+        let supportedMatches = SFSpeechRecognizer.supportedLocales()
+            .filter { $0.language.languageCode?.identifier == languageCode }
+            .map(\.identifier)
+            .sorted()
+        identifiers.append(contentsOf: supportedMatches)
+        identifiers.append(languageCode)
+
+        var seen = Set<String>()
+        return identifiers.compactMap { identifier in
+            guard seen.insert(identifier).inserted else { return nil }
+            return Locale(identifier: identifier)
+        }
     }
 
     // MARK: - Recognition Control
 
     func startRecognition() async throws {
-        guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
+        guard let speechRecognizer = resolvedRecognizer(), speechRecognizer.isAvailable else {
             throw SpeechRecognitionError.recognitionUnavailable
         }
 
@@ -78,7 +132,7 @@ class SpeechRecognitionService: ObservableObject {
     }
 
     func transcribe(samples: [Float], sampleRate: Double) async throws -> String {
-        guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
+        guard let speechRecognizer = resolvedRecognizer(), speechRecognizer.isAvailable else {
             throw SpeechRecognitionError.recognitionUnavailable
         }
 

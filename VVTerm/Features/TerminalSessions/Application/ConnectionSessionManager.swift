@@ -77,6 +77,8 @@ final class ConnectionSessionManager: ObservableObject {
     @Published var tmuxAttachPrompt: TmuxAttachPrompt?
     @Published var terminalBrowseModeBySession: [UUID: Bool] = [:]
     @Published var terminalFindNavigatorVisibleBySession: [UUID: Bool] = [:]
+    @Published private(set) var runtimeTitleBySession: [UUID: String] = [:]
+    @Published private(set) var titleOverrideBySession: [UUID: String] = [:]
 
     let tmuxResolver = TmuxAttachResolver()
 
@@ -163,6 +165,22 @@ final class ConnectionSessionManager: ObservableObject {
         return session
     }
 
+    private func sourceSessionForNewTab(on serverId: UUID) -> ConnectionSession? {
+        if let selectedSessionId = selectedSessionByServer[serverId],
+           let session = sessionWithID(selectedSessionId),
+           session.serverId == serverId {
+            return session
+        }
+
+        if let selectedSessionId,
+           let session = sessionWithID(selectedSessionId),
+           session.serverId == serverId {
+            return session
+        }
+
+        return firstSession(for: serverId)
+    }
+
     private func storedWorkingDirectory(for sessionId: UUID) -> String? {
         sessionWithID(sessionId)?.workingDirectory
     }
@@ -170,6 +188,11 @@ final class ConnectionSessionManager: ObservableObject {
     private func setStoredWorkingDirectory(_ workingDirectory: String, for sessionId: UUID) {
         guard let index = indexOfSession(sessionId) else { return }
         sessions[index].workingDirectory = workingDirectory
+    }
+
+    private func setPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides, for sessionId: UUID) {
+        guard let index = indexOfSession(sessionId) else { return }
+        sessions[index].presentationOverrides = presentationOverrides
     }
 
     private func tmuxStatus(for sessionId: UUID) -> TmuxStatus? {
@@ -272,21 +295,17 @@ final class ConnectionSessionManager: ObservableObject {
             throw VVTermError.proRequired(String(localized: "Upgrade to Pro for multiple connections"))
         }
 
-        let preferredSessionId = selectedSessionByServer[server.id] ?? selectedSessionId
-        let fallbackSessionId = firstSession(for: server.id)?.id
-        let sourceSessionId = preferredSessionId ?? fallbackSessionId
-        var sourceWorkingDirectory = sourceSessionId.flatMap(sessionWithID)?.workingDirectory
-            ?? firstSession(for: server.id)?.workingDirectory
+        let sourceSession = sourceSessionForNewTab(on: server.id)
+        var sourceWorkingDirectory = sourceSession?.workingDirectory
         if tmuxResolver.isTmuxEnabled(for: server.id),
-           let sourceSessionId,
-           let sourceSession = sessionWithID(sourceSessionId),
+           let sourceSession,
            let client = sshClient(for: sourceSession),
            let path = await RemoteTmuxManager.shared.currentPath(
-               sessionName: tmuxResolver.sessionName(for: sourceSessionId),
+               sessionName: tmuxResolver.sessionName(for: sourceSession.id),
                using: client
            ) {
             sourceWorkingDirectory = path
-            if let index = indexOfSession(sourceSessionId) {
+            if let index = indexOfSession(sourceSession.id) {
                 sessions[index].workingDirectory = path
             }
         }
@@ -327,7 +346,15 @@ final class ConnectionSessionManager: ObservableObject {
         switch state {
         case .connected:
             connectedServerIds.insert(serverId)
+            EngagementTracker.shared.recordSuccessfulConnection(
+                id: sessionId,
+                transport: sessions[index].activeTransport.rawValue
+            )
         case .disconnected, .failed:
+            if case .failed = state {
+                sessions[index].presentationOverrides = .empty
+                terminalViews[sessionId]?.applyPresentationOverrides(.empty)
+            }
             if sessions[index].tmuxStatus == .foreground {
                 setTmuxStatus(.background, for: sessionId)
             }
@@ -372,17 +399,63 @@ final class ConnectionSessionManager: ObservableObject {
         setStoredWorkingDirectory(normalized, for: sessionId)
     }
 
+    func updateSessionTitle(_ sessionId: UUID, rawTitle: String) {
+        guard sessionWithID(sessionId) != nil else { return }
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        guard runtimeTitleBySession[sessionId] != title else { return }
+
+        runtimeTitleBySession[sessionId] = title
+        logger.info("Runtime session title changed: \(title, privacy: .public)")
+    }
+
+    func setSessionTitleOverride(_ rawTitle: String?, for sessionId: UUID) {
+        guard sessionWithID(sessionId) != nil else { return }
+        let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if title.isEmpty {
+            titleOverrideBySession.removeValue(forKey: sessionId)
+        } else {
+            titleOverrideBySession[sessionId] = title
+        }
+    }
+
+    func presentationOverrides(for sessionId: UUID) -> TerminalPresentationOverrides {
+        sessionWithID(sessionId)?.presentationOverrides ?? .empty
+    }
+
+    func handleTerminalZoom(_ action: TerminalZoomAction, for sessionId: UUID) -> TerminalZoomResult? {
+        guard sessionWithID(sessionId) != nil else { return nil }
+
+        let currentOverrides = presentationOverrides(for: sessionId)
+        let overrides = currentOverrides.applyingZoom(action)
+        guard overrides != currentOverrides else {
+            return TerminalZoomResult(
+                presentationOverrides: currentOverrides,
+                effectiveFontSize: currentOverrides.resolvedFontSize()
+            )
+        }
+        setPresentationOverrides(overrides, for: sessionId)
+        schedulePersist()
+        terminalViews[sessionId]?.applyPresentationOverrides(overrides)
+        return TerminalZoomResult(
+            presentationOverrides: overrides,
+            effectiveFontSize: overrides.resolvedFontSize()
+        )
+    }
+
+    func displayTitle(for session: ConnectionSession) -> String {
+        titleOverrideBySession[session.id] ?? runtimeTitleBySession[session.id] ?? session.title
+    }
+
     // MARK: - Close Terminal
 
     /// Closes a terminal session and removes it from the list
-    func closeSession(_ session: ConnectionSession) {
+    func closeSession(_ session: ConnectionSession, notingSessionEnd: Bool = true) {
         let sessionId = session.id
         let title = session.title
         let wasSelected = selectedSessionId == sessionId
 
-        if session.tmuxStatus == .foreground || session.tmuxStatus == .background || session.tmuxStatus == .installing {
-            killTmuxIfNeeded(for: sessionId)
-        }
+        let tmuxSessionToKill = managedTmuxSessionNameToKill(for: sessionId, status: session.tmuxStatus)
 
         let replacementSessionId = replacementSessionIDAfterClosing(
             sessionId: sessionId,
@@ -407,13 +480,24 @@ final class ConnectionSessionManager: ObservableObject {
         )
 
         // Disconnect SSH client in background
-        scheduleSSHUnregister(for: sessionId, priority: .high)
+        scheduleSSHUnregister(
+            for: sessionId,
+            priority: .high,
+            killingManagedTmuxSessionNamed: tmuxSessionToKill
+        )
 
         if let selectedId = replacementSessionId ?? selectedSessionId,
            let selectedSession = sessionWithID(selectedId) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.redrawSessionAfterClose(selectedSession)
             }
+        }
+
+        if notingSessionEnd {
+            EngagementTracker.shared.noteTerminalSessionEnded(
+                otherTerminalsActive: !activeSessions.isEmpty,
+                isPro: StoreManager.shared.isPro
+            )
         }
 
         logger.info("Closed terminal session \(title)")
@@ -444,6 +528,8 @@ final class ConnectionSessionManager: ObservableObject {
         terminalsNeedingReconnectReset.remove(sessionId)
         terminalBrowseModeBySession.removeValue(forKey: sessionId)
         clearTmuxRuntimeState(for: sessionId)
+        runtimeTitleBySession.removeValue(forKey: sessionId)
+        titleOverrideBySession.removeValue(forKey: sessionId)
     }
 
     private func handleTerminalCloseUI(
@@ -502,10 +588,12 @@ final class ConnectionSessionManager: ObservableObject {
     // MARK: - Disconnect All
 
     /// Fully disconnects all sessions for a server and clears connection state
+    /// Closes every session during app termination — lifecycle teardown,
+    /// not a user-initiated session end.
     func disconnectAll() {
         let sessionsToClose = sessions
         for session in sessionsToClose {
-            closeSession(session)
+            closeSession(session, notingSessionEnd: false)
         }
         connectedServerId = nil
         logger.info("Disconnected all sessions")
@@ -546,6 +634,8 @@ final class ConnectionSessionManager: ObservableObject {
 
     /// Handle shell exit without removing the session (keeps tab for reconnect)
     func handleShellExit(for sessionId: UUID) {
+        setPresentationOverrides(.empty, for: sessionId)
+        terminalViews[sessionId]?.applyPresentationOverrides(.empty)
         updateSessionState(sessionId, to: .disconnected)
         markTerminalForReconnectReset(for: sessionId)
         scheduleSSHUnregister(for: sessionId)
@@ -661,7 +751,18 @@ final class ConnectionSessionManager: ObservableObject {
     }
 
     func unregisterSSHClient(for sessionId: UUID) async {
+        await unregisterSSHClient(for: sessionId, killingManagedTmuxSessionNamed: nil)
+    }
+
+    private func unregisterSSHClient(
+        for sessionId: UUID,
+        killingManagedTmuxSessionNamed tmuxSessionName: String?
+    ) async {
         let unregisterResult = takeSSHClientRegistration(for: sessionId)
+        if let tmuxSessionName,
+           let client = unregisterResult.shellToClose?.client {
+            await RemoteTmuxManager.shared.killSession(named: tmuxSessionName, using: client)
+        }
         await Self.finishSSHCleanup(for: unregisterResult)
     }
 
@@ -786,8 +887,11 @@ final class ConnectionSessionManager: ObservableObject {
         #endif
         terminalViews[sessionId] = terminal
         #if os(iOS)
-        setTerminalBrowseMode(terminal.isKeyboardInBrowseMode, for: sessionId)
-        setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: sessionId)
+        Task { @MainActor [weak self, weak terminal] in
+            guard let self, let terminal, self.terminalViews[sessionId] === terminal else { return }
+            self.setTerminalBrowseMode(terminal.isKeyboardInBrowseMode, for: sessionId)
+            self.setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: sessionId)
+        }
         #endif
         touchTerminal(sessionId)
         resumePendingTerminalViewportRefreshIfNeeded(for: sessionId)
@@ -798,8 +902,15 @@ final class ConnectionSessionManager: ObservableObject {
     func unregisterTerminal(for sessionId: UUID) {
         cleanupTerminalSurface(for: sessionId)
         terminalsNeedingReconnectReset.remove(sessionId)
+        #if os(iOS)
+        Task { @MainActor [weak self] in
+            self?.terminalBrowseModeBySession.removeValue(forKey: sessionId)
+            self?.terminalFindNavigatorVisibleBySession.removeValue(forKey: sessionId)
+        }
+        #else
         terminalBrowseModeBySession.removeValue(forKey: sessionId)
         terminalFindNavigatorVisibleBySession.removeValue(forKey: sessionId)
+        #endif
         removeTerminalFromAccessOrder(sessionId)
         terminalViewportRefreshTasks[sessionId]?.cancel()
         terminalViewportRefreshTasks.removeValue(forKey: sessionId)
@@ -926,9 +1037,16 @@ final class ConnectionSessionManager: ObservableObject {
         shellSuspendHandlers.removeValue(forKey: sessionId)
     }
 
-    private func scheduleSSHUnregister(for sessionId: UUID, priority: TaskPriority = .utility) {
+    private func scheduleSSHUnregister(
+        for sessionId: UUID,
+        priority: TaskPriority = .utility,
+        killingManagedTmuxSessionNamed tmuxSessionName: String? = nil
+    ) {
         Task.detached(priority: priority) { [weak self] in
-            await self?.unregisterSSHClient(for: sessionId)
+            await self?.unregisterSSHClient(
+                for: sessionId,
+                killingManagedTmuxSessionNamed: tmuxSessionName
+            )
         }
     }
 
@@ -1258,8 +1376,13 @@ private struct ConnectionSessionsSnapshot: Codable {
         let autoReconnect: Bool
         let parentSessionId: UUID?
         let workingDirectory: String?
+        /*
+        CDXC:iOSUpstreamSync 2026-06-29-20:02:
+        Session restore must persist upstream terminal presentation overrides without dropping Ghostex startup commands or tmux lifecycle bypass state used by gxserver-backed sessions.
+        */
         let startupCommand: String?
         let skipTmuxLifecycle: Bool?
+        let presentationOverrides: TerminalPresentationOverrides?
 
         init(from session: ConnectionSession) {
             self.id = session.id
@@ -1272,6 +1395,7 @@ private struct ConnectionSessionsSnapshot: Codable {
             self.workingDirectory = session.workingDirectory
             self.startupCommand = session.startupCommand
             self.skipTmuxLifecycle = session.skipTmuxLifecycle
+            self.presentationOverrides = session.presentationOverrides.isEmpty ? nil : session.presentationOverrides
         }
 
         func toSession() -> ConnectionSession {
@@ -1285,6 +1409,7 @@ private struct ConnectionSessionsSnapshot: Codable {
                 terminalSurfaceId: nil,
                 autoReconnect: autoReconnect,
                 workingDirectory: workingDirectory,
+                presentationOverrides: presentationOverrides ?? .empty,
                 parentSessionId: parentSessionId,
                 startupCommand: startupCommand,
                 skipTmuxLifecycle: skipTmuxLifecycle ?? false
@@ -1426,10 +1551,14 @@ extension ConnectionSessionManager {
         tmuxCleanupServers = cleanupSet
     }
 
-    private func prepareActiveTmuxSession(for sessionId: UUID, using client: SSHClient) async {
+    private func prepareActiveTmuxSession(
+        for sessionId: UUID,
+        using client: SSHClient,
+        backend: RemoteTmuxBackend
+    ) async {
         updateTmuxStatus(sessionId, status: currentTmuxStatus(for: sessionId))
         let terminalType = await client.remoteTerminalType()
-        await RemoteTmuxManager.shared.prepareConfig(using: client, terminalType: terminalType)
+        await RemoteTmuxManager.shared.prepareConfig(using: client, terminalType: terminalType, backend: backend)
     }
 
     private func immediateTmuxSelection(for sessionId: UUID) -> TmuxAttachSelection {
@@ -1445,7 +1574,8 @@ extension ConnectionSessionManager {
     private func tmuxStartupCommand(
         for sessionId: UUID,
         selection: TmuxAttachSelection,
-        workingDirectory: String
+        workingDirectory: String,
+        backend: RemoteTmuxBackend
     ) -> String? {
         switch selection {
         case .skipTmux:
@@ -1453,10 +1583,11 @@ extension ConnectionSessionManager {
         case .createManaged:
             return RemoteTmuxManager.shared.attachCommand(
                 sessionName: tmuxResolver.sessionName(for: sessionId),
-                workingDirectory: workingDirectory
+                workingDirectory: workingDirectory,
+                backend: backend
             )
         case .attachExisting(let sessionName):
-            return RemoteTmuxManager.shared.attachExistingCommand(sessionName: sessionName)
+            return RemoteTmuxManager.shared.attachExistingCommand(sessionName: sessionName, backend: backend)
         }
     }
 
@@ -1481,8 +1612,7 @@ extension ConnectionSessionManager {
             return
         }
 
-        let tmuxAvailable = await RemoteTmuxManager.shared.isTmuxAvailable(using: client)
-        guard tmuxAvailable else {
+        guard let backend = await RemoteTmuxManager.shared.tmuxBackend(using: client) else {
             await MainActor.run {
                 self.disableTmuxAttachment(for: sessionId, status: .missing)
             }
@@ -1492,13 +1622,14 @@ extension ConnectionSessionManager {
         let selection = immediateTmuxSelection(for: sessionId)
 
         await runTmuxCleanupIfNeeded(for: serverId, sessionId: sessionId, selection: selection, using: client)
-        await prepareActiveTmuxSession(for: sessionId, using: client)
+        await prepareActiveTmuxSession(for: sessionId, using: client, backend: backend)
 
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
         guard let rebuilt = tmuxResolver.buildAttachExecCommand(
             for: sessionId,
             selection: selection,
-            workingDirectory: workingDirectory
+            workingDirectory: workingDirectory,
+            backend: backend
         ) else {
             return
         }
@@ -1528,8 +1659,7 @@ extension ConnectionSessionManager {
             return (nil, true)
         }
 
-        let tmuxAvailable = await RemoteTmuxManager.shared.isTmuxAvailable(using: client)
-        guard tmuxAvailable else {
+        guard let backend = await RemoteTmuxManager.shared.tmuxBackend(using: client) else {
             disableTmuxAttachment(for: sessionId, status: .missing)
             return (nil, true)
         }
@@ -1545,10 +1675,18 @@ extension ConnectionSessionManager {
         }
 
         await runTmuxCleanupIfNeeded(for: serverId, sessionId: sessionId, selection: selection, using: client)
-        await prepareActiveTmuxSession(for: sessionId, using: client)
+        await prepareActiveTmuxSession(for: sessionId, using: client, backend: backend)
 
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: client)
-        return (tmuxStartupCommand(for: sessionId, selection: selection, workingDirectory: workingDirectory), true)
+        return (
+            tmuxStartupCommand(
+                for: sessionId,
+                selection: selection,
+                workingDirectory: workingDirectory,
+                backend: backend
+            ),
+            true
+        )
     }
 
     func startTmuxInstall(for sessionId: UUID) async {
@@ -1558,13 +1696,19 @@ extension ConnectionSessionManager {
 
         updateTmuxStatus(sessionId, status: .installing)
 
+        guard let backend = await RemoteTmuxManager.shared.tmuxInstallBackend(using: registration.client) else {
+            updateTmuxStatus(sessionId, status: .off)
+            return
+        }
+
         let sessionName = tmuxResolver.sessionName(for: sessionId)
         let workingDirectory = await resolveTmuxWorkingDirectory(for: sessionId, using: registration.client)
         let terminalType = await registration.client.remoteTerminalType()
         let script = RemoteTmuxManager.shared.installAndAttachScript(
             sessionName: sessionName,
             workingDirectory: workingDirectory,
-            terminalType: terminalType
+            terminalType: terminalType,
+            backend: backend
         )
         await RemoteTmuxManager.shared.sendScript(script, using: registration.client, shellId: registration.shellId)
 
@@ -1593,6 +1737,13 @@ extension ConnectionSessionManager {
             throw SSHError.notConnected
         }
         try await RemoteMoshManager.shared.installMoshServer(using: registration.client)
+    }
+
+    private func managedTmuxSessionNameToKill(for sessionId: UUID, status: TmuxStatus) -> String? {
+        guard status == .foreground || status == .background || status == .installing else { return nil }
+        let ownership = tmuxResolver.sessionOwnership[sessionId] ?? .managed
+        guard ownership == .managed else { return nil }
+        return tmuxResolver.sessionName(for: sessionId)
     }
 
     func killTmuxIfNeeded(for sessionId: UUID) {
@@ -1644,6 +1795,8 @@ extension ConnectionSessionManager {
         selectedViewByServer = [:]
         selectedSessionByServer = [:]
         tmuxAttachPrompt = nil
+        runtimeTitleBySession = [:]
+        titleOverrideBySession = [:]
         shellRegistry.removeAll()
         shellCancelHandlers.removeAll()
         shellSuspendHandlers.removeAll()

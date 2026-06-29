@@ -62,6 +62,8 @@ struct TerminalTabView: View {
         return TerminalSplitActions(
             splitHorizontal: { splitHorizontal() },
             splitVertical: { splitVertical() },
+            splitLeft: { splitLeft() },
+            splitUp: { splitUp() },
             closePane: { requestClosePane() }
         )
     }
@@ -81,6 +83,7 @@ struct TerminalTabView: View {
                     isTabSelected: isSelected,
                     onFocus: { },
                     onProcessExit: { handlePaneExit(paneId: tab.rootPaneId) },
+                    terminalContextMenuActions: terminalContextMenuActions(for: tab.rootPaneId),
                     showsVoiceButton: isSelected
                         && voiceButtonEnabled
                         && !showingVoiceRecording
@@ -153,6 +156,7 @@ struct TerminalTabView: View {
                     isTabSelected: isSelected,
                     onFocus: { focusPane(paneId) },
                     onProcessExit: { handlePaneExit(paneId: paneId) },
+                    terminalContextMenuActions: terminalContextMenuActions(for: paneId),
                     showsVoiceButton: isSelected
                         && voiceButtonEnabled
                         && !showingVoiceRecording
@@ -219,21 +223,56 @@ struct TerminalTabView: View {
     // MARK: - Split Actions
 
     func splitHorizontal() {
-        guard StoreManager.shared.isPro else {
-            showingSplitPaneUpgradeAlert = true
-            return
-        }
-        guard tabManager.splitHorizontal(tab: tab, paneId: tab.focusedPaneId) != nil else { return }
-        layoutVersion += 1
+        splitPane(tab.focusedPaneId, placement: .right)
     }
 
     func splitVertical() {
+        splitPane(tab.focusedPaneId, placement: .down)
+    }
+
+    func splitLeft() {
+        splitPane(tab.focusedPaneId, placement: .left)
+    }
+
+    func splitUp() {
+        splitPane(tab.focusedPaneId, placement: .up)
+    }
+
+    private func splitPane(_ paneId: UUID, placement: TerminalSplitPlacement) {
         guard StoreManager.shared.isPro else {
             showingSplitPaneUpgradeAlert = true
             return
         }
-        guard tabManager.splitVertical(tab: tab, paneId: tab.focusedPaneId) != nil else { return }
+        focusPane(paneId)
+        let newPaneId: UUID?
+        switch placement {
+        case .right:
+            newPaneId = tabManager.splitRight(tab: tab, paneId: paneId)
+        case .left:
+            newPaneId = tabManager.splitLeft(tab: tab, paneId: paneId)
+        case .down:
+            newPaneId = tabManager.splitDown(tab: tab, paneId: paneId)
+        case .up:
+            newPaneId = tabManager.splitUp(tab: tab, paneId: paneId)
+        }
+        guard newPaneId != nil else { return }
         layoutVersion += 1
+    }
+
+    private func terminalContextMenuActions(for paneId: UUID) -> TerminalContextMenuActions {
+        TerminalContextMenuActions(
+            focus: { focusPane(paneId) },
+            splitRight: { splitPane(paneId, placement: .right) },
+            splitLeft: { splitPane(paneId, placement: .left) },
+            splitDown: { splitPane(paneId, placement: .down) },
+            splitUp: { splitPane(paneId, placement: .up) },
+            currentTitle: {
+                tabManager.displayTitle(forPane: paneId, fallback: tab.title) ?? tab.title
+            },
+            setTitle: { title in
+                tabManager.setPaneTitleOverride(title, for: paneId)
+            }
+        )
     }
 
     func closeCurrentPane() {
@@ -256,16 +295,6 @@ struct TerminalTabView: View {
             },
             isProcessing: $voiceProcessing
         )
-        .padding(.vertical, 10)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: 500)
-        .adaptiveGlass()
-        .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
     }
 
     private func updateKeyMonitor() {
@@ -380,6 +409,7 @@ struct TerminalPaneView: View {
     let isTabSelected: Bool
     let onFocus: () -> Void
     let onProcessExit: () -> Void
+    let terminalContextMenuActions: TerminalContextMenuActions
     let showsVoiceButton: Bool
     let onVoiceTrigger: () -> Void
 
@@ -400,6 +430,7 @@ struct TerminalPaneView: View {
     @State private var terminalBackgroundColor: Color = Self.initialTerminalBackgroundColor()
     @State private var connectWatchdogToken = UUID()
     @State private var hasEstablishedConnection = false
+    @State private var showingRetrustHostConfirmation = false
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
 
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Aizen Dark"
@@ -413,6 +444,20 @@ struct TerminalPaneView: View {
 
     private var connectionState: ConnectionState {
         paneState?.connectionState ?? .idle
+    }
+
+    private var isHostKeyVerificationFailure: Bool {
+        guard case .failed(let error) = connectionState else { return false }
+        return error == SSHError.hostKeyVerificationFailed.localizedDescription
+            || error.contains("Host key verification failed")
+    }
+
+    private var retrustHostConfirmationMessage: String {
+        let endpoint = "\(server.host):\(server.port)"
+        return String(
+            format: String(localized: "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
+            endpoint
+        )
     }
 
     /// Should this pane actually have focus (both tab selected AND pane focused)
@@ -541,6 +586,7 @@ struct TerminalPaneView: View {
                         credentials: credentials,
                         richPasteUIModel: richPasteUI,
                         isActive: shouldFocus,
+                        terminalContextMenuActions: terminalContextMenuActions,
                         onProcessExit: onProcessExit,
                         onReady: { isReady = true }
                     )
@@ -663,6 +709,14 @@ struct TerminalPaneView: View {
         } message: {
             Text("Mosh is selected for this server, but mosh-server is missing on the host.")
         }
+        .alert("Replace Trusted Host?", isPresented: $showingRetrustHostConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Replace and Reconnect", role: .destructive) {
+                retrustHostAndRetry()
+            }
+        } message: {
+            Text(retrustHostConfirmationMessage)
+        }
         .terminalRichPastePrompt(using: richPasteUI)
     }
 
@@ -750,6 +804,12 @@ struct TerminalPaneView: View {
                         Text(error)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if isHostKeyVerificationFailure {
+                            Button("Trust New Host Key") {
+                                showingRetrustHostConfirmation = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                         Button("Retry") {
                             retryConnection()
                         }
@@ -776,6 +836,11 @@ struct TerminalPaneView: View {
 
     private func disableTmuxForServer() {
         TerminalTabManager.shared.disableTmux(for: server.id)
+    }
+
+    private func retrustHostAndRetry() {
+        KnownHostsManager.shared.remove(host: server.host, port: server.port)
+        retryConnection()
     }
 
     private func attemptAutoReconnectIfNeeded() {
@@ -929,6 +994,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
     let credentials: ServerCredentials
     let richPasteUIModel: TerminalRichPasteUIModel
     let isActive: Bool
+    let terminalContextMenuActions: TerminalContextMenuActions
     let onProcessExit: () -> Void
     let onReady: () -> Void
 
@@ -960,6 +1026,14 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
             existingTerminal.onPwdChange = { [paneId] rawDirectory in
                 TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
             }
+            existingTerminal.onTitleChange = { [paneId] title in
+                TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+            }
+            existingTerminal.onZoomAction = { [paneId] action in
+                TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+            }
+            existingTerminal.terminalContextMenuActions = terminalContextMenuActions
+            existingTerminal.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
             existingTerminal.writeCallback = { [paneId] data in
                 if let client = TerminalTabManager.shared.getSSHClient(for: paneId),
                    let shellId = TerminalTabManager.shared.shellId(for: paneId) {
@@ -1006,6 +1080,14 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
         terminalView.onPwdChange = { [paneId] rawDirectory in
             TerminalTabManager.shared.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
         }
+        terminalView.onTitleChange = { [paneId] title in
+            TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+        }
+        terminalView.onZoomAction = { [paneId] action in
+            TerminalTabManager.shared.handleTerminalZoom(action, for: paneId)
+        }
+        terminalView.terminalContextMenuActions = terminalContextMenuActions
+        terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
 
         // Store terminal reference
         coordinator.terminal = terminalView
@@ -1035,6 +1117,11 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         if let scrollView = nsView as? TerminalScrollView {
             scrollView.shouldOwnFirstResponder = isActive
+            let terminalView = scrollView.surfaceView
+            terminalView.terminalContextMenuActions = terminalContextMenuActions
+            if terminalView.surfacePresentationOverrides != TerminalTabManager.shared.presentationOverrides(for: paneId) {
+                terminalView.applyPresentationOverrides(TerminalTabManager.shared.presentationOverrides(for: paneId))
+            }
         }
     }
 
@@ -1136,7 +1223,6 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
 
             if shellId != nil {
                 TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connected)
-                logger.debug("Shell already active for pane")
                 return
             }
 
@@ -1173,12 +1259,10 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
                     terminal: terminal,
                     logger: logger,
                     onAttempt: { attempt in
-                        await MainActor.run {
-                            if attempt == 1 {
-                                TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connecting)
-                            } else {
-                                TerminalTabManager.shared.updatePaneState(paneId, connectionState: .reconnecting(attempt: attempt))
-                            }
+                        if attempt == 1 {
+                            TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connecting)
+                        } else {
+                            TerminalTabManager.shared.updatePaneState(paneId, connectionState: .reconnecting(attempt: attempt))
                         }
                     },
                     startupPlan: {
@@ -1189,7 +1273,7 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
                         )
                     },
                     registerShell: { shell, skipTmuxLifecycle in
-                        await TerminalTabManager.shared.registerSSHClient(
+                        TerminalTabManager.shared.registerSSHClient(
                             sshClient,
                             shellId: shell.id,
                             for: paneId,
@@ -1198,56 +1282,45 @@ struct SSHTerminalPaneWrapper: NSViewRepresentable {
                             fallbackReason: shell.fallbackReason,
                             skipTmuxLifecycle: skipTmuxLifecycle
                         )
-                        await MainActor.run {
-                            TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connected)
-                            self.shellId = shell.id
-                        }
+                        TerminalTabManager.shared.updatePaneState(paneId, connectionState: .connected)
+                        self.shellId = shell.id
                         await self.applyWorkingDirectoryIfNeeded(paneId: paneId, shellId: shell.id, sshClient: sshClient)
                     },
                     onBeforeShellStart: { cols, rows in
-                        await MainActor.run {
-                            self.lastSize = (cols, rows)
-                        }
+                        self.lastSize = (cols, rows)
                     },
                     onShellStarted: { _, _ in },
+                    onTitleChange: { title in
+                        TerminalTabManager.shared.updatePaneTitle(paneId, rawTitle: title)
+                    },
                     shouldContinueStreaming: { data, terminal in
-                        await MainActor.run { [weak self] in
-                            guard self?.terminal != nil else { return false }
-                            terminal.feedData(data)
-                            return true
-                        }
+                        guard self.terminal != nil else { return false }
+                        terminal.feedData(data)
+                        return true
                     },
                     shouldResetClient: { sshError in
                         switch sshError {
                         case .notConnected, .connectionFailed, .socketError, .timeout:
                             return true
                         case .channelOpenFailed, .shellRequestFailed:
-                            let hasOtherRegistrations = await MainActor.run {
-                                TerminalTabManager.shared.hasOtherRegistrations(
-                                    using: sshClient,
-                                    excluding: paneId
-                                )
-                            }
+                            let hasOtherRegistrations = await TerminalTabManager.shared.hasOtherRegistrations(
+                                using: sshClient,
+                                excluding: paneId
+                            )
                             return !hasOtherRegistrations
                         case .authenticationFailed, .tailscaleAuthenticationNotAccepted, .cloudflareConfigurationRequired, .cloudflareAuthenticationFailed, .cloudflareTunnelFailed, .hostKeyVerificationFailed, .moshServerMissing, .moshBootstrapFailed, .moshSessionFailed, .unknown:
                             return false
                         }
                     },
                     onProcessExit: {
-                        await MainActor.run {
-                            onProcessExit()
-                        }
+                        onProcessExit()
                     },
                     onFailure: { error, terminal in
                         let errorMsg = "\r\n\u{001B}[31mSSH Error: \(error.localizedDescription)\u{001B}[0m\r\n"
                         if let data = errorMsg.data(using: .utf8) {
-                            await MainActor.run {
-                                terminal.feedData(data)
-                            }
+                            terminal.feedData(data)
                         }
-                        await MainActor.run {
-                            TerminalTabManager.shared.updatePaneState(paneId, connectionState: .failed(error.localizedDescription))
-                        }
+                        TerminalTabManager.shared.updatePaneState(paneId, connectionState: .failed(error.localizedDescription))
                     }
                 )
             }

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ZenModeFloatingOverlay<Panel: View>: View {
     @Binding var isPanelPresented: Bool
-    let indicatorColor: Color?
     let panel: (CGFloat) -> Panel
 
     #if os(macOS)
@@ -19,7 +18,6 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
         @ViewBuilder panel: @escaping (CGFloat) -> Panel
     ) {
         self._isPanelPresented = isPanelPresented
-        self.indicatorColor = indicatorColor
         self.panel = panel
     }
 
@@ -74,37 +72,35 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
                 isPanelPresented.toggle()
             }
         } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(.primary)
-                    .adaptiveGlassCircle()
-                    .overlay(
-                        Circle()
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
-
-                if let indicatorColor {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 40, height: 40)
+                .foregroundStyle(.primary)
+                .zenModeLauncherGlass()
+                .overlay(
                     Circle()
-                        .fill(indicatorColor)
-                        .frame(width: 8, height: 8)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.black.opacity(0.22), lineWidth: 0.5)
-                        )
-                        .padding(5)
-                }
-            }
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Zen controls")
-        .accessibilityValue(isPanelPresented ? "Expanded" : "Collapsed")
+        .accessibilityLabel(String(localized: "Zen controls"))
+        .accessibilityValue(isPanelPresented ? String(localized: "Expanded") : String(localized: "Collapsed"))
     }
 
     private func closePanel() {
         withAnimation(.easeInOut(duration: 0.18)) {
             isPanelPresented = false
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func zenModeLauncherGlass() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            self.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            self.background(.ultraThinMaterial, in: Circle())
         }
     }
 }
@@ -302,6 +298,7 @@ struct MacOSZenModePanel: View {
     let viewTabs: [ConnectionViewTab]
     let terminalTabs: [TerminalTab]
     let selectedTerminalTabId: Binding<UUID?>
+    let terminalTabTitle: (TerminalTab) -> String
     let paneState: (TerminalTab) -> TerminalPaneState?
     let fileTabs: [RemoteFileTab]
     let selectedFileTabId: Binding<UUID?>
@@ -473,7 +470,7 @@ struct MacOSZenModePanel: View {
 
         ZenModeSection("Window") {
             ZenModeActionButton(
-                title: isSidebarVisible ? "Hide Sidebar" : "Show Sidebar",
+                title: LocalizedStringKey(isSidebarVisible ? "Hide Sidebar" : "Show Sidebar"),
                 systemImage: "sidebar.left"
             ) {
                 onToggleSidebar()
@@ -516,7 +513,7 @@ struct MacOSZenModePanel: View {
                         .frame(width: 7, height: 7)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(tab.title)
+                        Text(terminalTabTitle(tab))
                             .font(.callout.weight(isSelected ? .semibold : .regular))
                             .lineLimit(1)
 
@@ -613,6 +610,7 @@ struct IOSZenModePanel: View {
     let viewTabs: [ConnectionViewTab]
     let sessions: [ConnectionSession]
     let selectedSessionId: Binding<UUID?>
+    let sessionTitle: (ConnectionSession) -> String
     let onCloseSession: (ConnectionSession) -> Void
     let fileTabs: [RemoteFileTab]
     let selectedFileTabId: Binding<UUID?>
@@ -735,7 +733,7 @@ struct IOSZenModePanel: View {
                         .fill(session.connectionState.statusTintColor)
                         .frame(width: 7, height: 7)
 
-                    Text(session.title)
+                    Text(sessionTitle(session))
                         .font(.callout.weight(isSelected ? .semibold : .regular))
                         .lineLimit(1)
 

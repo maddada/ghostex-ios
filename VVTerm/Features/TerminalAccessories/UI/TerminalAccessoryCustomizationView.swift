@@ -3,6 +3,7 @@ import SwiftUI
 struct TerminalAccessoryCustomizationView: View {
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @State private var showingCreateActionSheet = false
+    @State private var showingProGateAlert = false
 
     private var activeItems: [TerminalAccessoryItemRef] {
         preferences.activeItems
@@ -152,7 +153,11 @@ struct TerminalAccessoryCustomizationView: View {
                     Text("Available Custom Actions")
                     Spacer(minLength: 8)
                     Button {
-                        showingCreateActionSheet = true
+                        if preferences.isCustomActionCreationProGated {
+                            showingProGateAlert = true
+                        } else {
+                            showingCreateActionSheet = true
+                        }
                     } label: {
                         Label("Create Action", systemImage: "plus")
                     }
@@ -175,9 +180,20 @@ struct TerminalAccessoryCustomizationView: View {
             EditButton()
         }
         #endif
+        .proFeatureAlert(
+            title: String(localized: "Custom Actions"),
+            message: String(
+                format: String(localized: "The free plan includes %lld custom actions. Upgrade to Pro for unlimited custom actions."),
+                Int64(FreeTierLimits.maxCustomActions)
+            ),
+            source: .snippetLimit,
+            isPresented: $showingProGateAlert
+        )
         .sheet(isPresented: $showingCreateActionSheet) {
             TerminalCustomActionFormView()
+                .adaptiveSoftScrollEdges()
         }
+        .adaptiveSoftScrollEdges()
     }
 
     @ViewBuilder

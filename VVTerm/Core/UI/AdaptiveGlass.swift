@@ -95,6 +95,20 @@ extension View {
         }
     }
 
+    /// Apply native soft scroll-edge effects where supported.
+    @ViewBuilder
+    func adaptiveSoftScrollEdges(_ edges: Edge.Set = .all) -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            #if compiler(>=6.2)
+            self.scrollEdgeEffectStyle(.soft, for: edges)
+            #else
+            self
+            #endif
+        } else {
+            self
+        }
+    }
+
     /// Apply glass effect with accessibility support
     @ViewBuilder
     func adaptiveGlassAccessible() -> some View {

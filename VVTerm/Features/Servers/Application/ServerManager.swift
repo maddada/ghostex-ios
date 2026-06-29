@@ -12,6 +12,7 @@ final class ServerManager: ObservableObject {
     @Published var workspaces: [Workspace] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published private(set) var freePlanGeneration: FreePlanGeneration = ServerManager.loadStoredFreePlanGeneration() ?? .currentOneServer
 
     private let cloudKit = CloudKitManager.shared
     private let syncCoordinator = CloudKitSyncCoordinator.shared
@@ -34,6 +35,7 @@ final class ServerManager: ObservableObject {
     private init() {
         // Load local data first (fast)
         loadLocalData()
+        refreshFreePlanGeneration(persistCurrentIfNeeded: !isSyncEnabled, reason: "local_load")
         // Then sync with CloudKit in background
         Task { await loadData() }
     }
@@ -110,6 +112,42 @@ final class ServerManager: ObservableObject {
 
     private var hasSeenWelcome: Bool {
         UserDefaults.standard.bool(forKey: hasSeenWelcomeKey)
+    }
+
+    private static func loadStoredFreePlanGeneration() -> FreePlanGeneration? {
+        guard let rawValue = UserDefaults.standard.string(forKey: FreeTierLimits.planGenerationStorageKey) else {
+            return nil
+        }
+        return FreePlanGeneration(rawValue: rawValue)
+    }
+
+    private func refreshFreePlanGeneration(persistCurrentIfNeeded: Bool, reason: String) {
+        if let storedGeneration = Self.loadStoredFreePlanGeneration() {
+            freePlanGeneration = storedGeneration
+            return
+        }
+
+        if hasLegacyFreePlanEvidence {
+            persistFreePlanGeneration(.legacyThreeServers, reason: reason)
+        } else if persistCurrentIfNeeded {
+            persistFreePlanGeneration(.currentOneServer, reason: reason)
+        } else {
+            freePlanGeneration = .currentOneServer
+        }
+    }
+
+    private var hasLegacyFreePlanEvidence: Bool {
+        servers.contains { $0.createdAt < FreeTierLimits.currentOneServerPlanCutoff }
+    }
+
+    private func persistFreePlanGeneration(_ generation: FreePlanGeneration, reason: String) {
+        freePlanGeneration = generation
+        UserDefaults.standard.set(generation.rawValue, forKey: FreeTierLimits.planGenerationStorageKey)
+        AnalyticsTracker.shared.trackFreePlanGenerationAssigned(
+            generation: generation.rawValue,
+            serverCount: servers.count,
+            reason: reason
+        )
     }
 
     private var pendingBootstrapWorkspaceID: UUID? {
@@ -417,6 +455,7 @@ final class ServerManager: ObservableObject {
 
         guard isSyncEnabled else {
             logger.info("iCloud sync disabled; using local data only")
+            refreshFreePlanGeneration(persistCurrentIfNeeded: true, reason: "local_only")
             return
         }
 
@@ -443,6 +482,7 @@ final class ServerManager: ObservableObject {
 
             // Save merged data locally
             saveLocalData()
+            refreshFreePlanGeneration(persistCurrentIfNeeded: true, reason: "cloudkit_load")
 
             logger.info("Loaded \(self.workspaces.count) workspaces and \(self.servers.count) servers from CloudKit")
         } catch {
@@ -937,32 +977,9 @@ final class ServerManager: ObservableObject {
     }
 
     func updateLastConnected(for server: Server) async {
-        var updated = server
-        updated = Server(
-            id: server.id,
-            workspaceId: server.workspaceId,
-            environment: server.environment,
-            name: server.name,
-            host: server.host,
-            port: server.port,
-            username: server.username,
-            connectionMode: server.connectionMode,
-            authMethod: server.authMethod,
-            cloudflareAccessMode: server.cloudflareAccessMode,
-            cloudflareTeamDomainOverride: server.cloudflareTeamDomainOverride,
-            cloudflareAppDomainOverride: server.cloudflareAppDomainOverride,
-            tags: server.tags,
-            notes: server.notes,
-            lastConnected: Date(),
-            isFavorite: server.isFavorite,
-            requiresBiometricUnlock: server.requiresBiometricUnlock,
-            tmuxEnabledOverride: server.tmuxEnabledOverride,
-            tmuxStartupBehaviorOverride: server.tmuxStartupBehaviorOverride,
-            createdAt: server.createdAt,
-            updatedAt: Date()
-        )
-
-        try? await updateServer(updated)
+        guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
+        servers[index].lastConnected = Date()
+        saveLocalData()
     }
 
     // MARK: - Workspace CRUD
@@ -1177,7 +1194,7 @@ final class ServerManager: ObservableObject {
 
     var canAddServer: Bool {
         if StoreManager.shared.isPro { return true }
-        return servers.count < FreeTierLimits.maxServers
+        return servers.count < freeServerLimit
     }
 
     var canAddWorkspace: Bool {
@@ -1187,6 +1204,14 @@ final class ServerManager: ObservableObject {
 
     var canCreateCustomEnvironment: Bool {
         StoreManager.shared.isPro
+    }
+
+    var freeServerLimit: Int {
+        freePlanGeneration.serverLimit
+    }
+
+    var isLegacyFreePlan: Bool {
+        freePlanGeneration == .legacyThreeServers
     }
 
     // MARK: - Downgrade Locking
@@ -1205,7 +1230,7 @@ final class ServerManager: ObservableObject {
     /// Set of server IDs that are accessible on free tier (oldest N servers)
     var unlockedServerIds: Set<UUID> {
         if StoreManager.shared.isPro { return Set(servers.map(\.id)) }
-        let unlocked = serversSortedByCreation.prefix(FreeTierLimits.maxServers)
+        let unlocked = serversSortedByCreation.prefix(freeServerLimit)
         return Set(unlocked.map(\.id))
     }
 
@@ -1231,7 +1256,7 @@ final class ServerManager: ObservableObject {
     /// Number of servers that are locked due to downgrade
     var lockedServersCount: Int {
         if StoreManager.shared.isPro { return 0 }
-        return max(0, servers.count - FreeTierLimits.maxServers)
+        return max(0, servers.count - freeServerLimit)
     }
 
     /// Number of workspaces that are locked due to downgrade
@@ -1359,10 +1384,41 @@ final class ServerManager: ObservableObject {
 
 // MARK: - Free Tier Limits
 
+enum FreePlanGeneration: String {
+    case legacyThreeServers = "legacy_three_servers"
+    case currentOneServer = "current_one_server"
+
+    var serverLimit: Int {
+        switch self {
+        case .legacyThreeServers: return FreeTierLimits.legacyMaxServers
+        case .currentOneServer: return FreeTierLimits.currentMaxServers
+        }
+    }
+}
+
 enum FreeTierLimits {
     static let maxWorkspaces = 1
-    static let maxServers = 3
+    static let currentMaxServers = 1
+    static let legacyMaxServers = 3
     static let maxTabs = 1
+    static let maxCustomActions = 3
+    static let planGenerationStorageKey = "freePlanGeneration"
+    static let currentOneServerPlanCutoff: Date = {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = 2026
+        components.month = 6
+        components.day = 25
+        return components.date ?? Date(timeIntervalSince1970: 1_782_345_600)
+    }()
+
+    static func serverLimitDescription(_ limit: Int) -> String {
+        if limit == 1 {
+            return String(localized: "1 server")
+        }
+        return String(format: String(localized: "%lld servers"), Int64(limit))
+    }
 }
 
 // MARK: - VVTerm Error

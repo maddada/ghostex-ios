@@ -25,37 +25,28 @@ struct KeychainSettingsView: View {
                 Form {
                     Section {
                         ForEach(storedKeys) { key in
-                            Button {
-                                keyToShowDetails = key
-                            } label: {
-                                SSHKeyRow(key: key)
-                            }
-                            .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    keyToDelete = key
-                                    showingDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-
+                            HStack(spacing: 8) {
                                 Button {
                                     keyToShowDetails = key
                                 } label: {
-                                    Label(String(localized: "Details"), systemImage: "info.circle")
+                                    SSHKeyRow(key: key)
                                 }
-                                .tint(.gray)
+                                .buttonStyle(.plain)
 
-                                Button {
-                                    if let publicKey = key.publicKey {
-                                        copyToClipboard(publicKey)
-                                    }
-                                } label: {
-                                    Label(String(localized: "Copy to Clipboard"), systemImage: "doc.on.doc")
-                                }
-                                .tint(.blue)
-                                .disabled(key.publicKey == nil)
+                                #if os(macOS)
+                                keyActionsMenu(for: key)
+                                #endif
                             }
+                            #if os(macOS)
+                            .contextMenu {
+                                keyActions(for: key)
+                            }
+                            #endif
+                            #if os(iOS)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                keyActions(for: key)
+                            }
+                            #endif
                         }
                     } footer: {
                         Text("Keys are stored securely in your device's Keychain. Passphrases are stored separately.")
@@ -93,6 +84,7 @@ struct KeychainSettingsView: View {
                 }
             }
         }
+        .adaptiveSoftScrollEdges()
         .onAppear {
             loadKeys()
         }
@@ -100,15 +92,18 @@ struct KeychainSettingsView: View {
             AddSSHKeySheet(onSave: { _ in
                 loadKeys()
             })
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingGenerateKey) {
             GenerateSSHKeySheet(onSave: { entry in
                 loadKeys()
                 keyToShowDetails = entry
             })
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $keyToShowDetails) { key in
             KeyDetailsSheet(keyEntry: key)
+                .adaptiveSoftScrollEdges()
         }
         .alert(
             "Delete SSH Key",
@@ -182,6 +177,49 @@ struct KeychainSettingsView: View {
         NSPasteboard.general.setString(text, forType: .string)
         #endif
     }
+
+    @ViewBuilder
+    private func keyActions(for key: SSHKeyEntry) -> some View {
+        Button {
+            keyToShowDetails = key
+        } label: {
+            Label(String(localized: "Details"), systemImage: "info.circle")
+        }
+        .tint(.gray)
+
+        Button {
+            if let publicKey = key.publicKey {
+                copyToClipboard(publicKey)
+            }
+        } label: {
+            Label(String(localized: "Copy to Clipboard"), systemImage: "doc.on.doc")
+        }
+        .tint(.blue)
+        .disabled(key.publicKey == nil)
+
+        Button(role: .destructive) {
+            keyToDelete = key
+            showingDeleteConfirmation = true
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    #if os(macOS)
+    private func keyActionsMenu(for key: SSHKeyEntry) -> some View {
+        Menu {
+            keyActions(for: key)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .imageScale(.large)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel(String(localized: "Key Actions"))
+    }
+    #endif
 }
 
 // MARK: - SSH Key Row
@@ -318,6 +356,7 @@ struct AddSSHKeySheet: View {
                 handleKeyImport(result)
             }
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private var isValid: Bool {
@@ -475,6 +514,7 @@ struct GenerateSSHKeySheet: View {
                 }
             }
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private var isValidForGeneration: Bool {
@@ -581,6 +621,7 @@ struct KeyDetailsSheet: View {
                 }
             }
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private func copyToClipboard(_ text: String) {
@@ -654,6 +695,7 @@ struct PublicKeyDisplaySheet: View {
                 }
             }
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private func copyToClipboard(_ text: String) {

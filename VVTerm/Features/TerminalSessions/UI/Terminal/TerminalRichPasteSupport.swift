@@ -191,6 +191,7 @@ private struct TerminalRichPastePromptModifier: ViewModifier {
                     prompt.cancelAction()
                 }
             )
+            .adaptiveSoftScrollEdges()
         }
     }
 }
@@ -506,6 +507,7 @@ struct TerminalRichPastePromptSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .interactiveDismissDisabled()
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(spacing: 0) {
             DialogSheetHeader(title: LocalizedStringKey(prompt.title)) {

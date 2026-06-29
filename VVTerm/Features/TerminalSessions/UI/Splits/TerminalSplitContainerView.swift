@@ -10,6 +10,8 @@ struct ServerViewTabActions {
     let closeSelected: () -> Void
     let selectPrevious: () -> Void
     let selectNext: () -> Void
+    /// Select the tab at a zero-based index (Cmd+1…9). No-op if out of range.
+    let selectIndex: (Int) -> Void
 }
 
 #if os(macOS)
@@ -27,7 +29,7 @@ struct SplitCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Terminal") {
-            Button(isZenModeEnabled == true ? "Exit Zen Mode" : "Enter Zen Mode") {
+            Button(isZenModeEnabled == true ? String(localized: "Exit Zen Mode") : String(localized: "Enter Zen Mode")) {
                 toggleZenMode?()
             }
             .keyboardShortcut("z", modifiers: [.command, .control])
@@ -74,6 +76,8 @@ struct SplitCommands: Commands {
 struct TerminalSplitActions {
     let splitHorizontal: () -> Void
     let splitVertical: () -> Void
+    let splitLeft: () -> Void
+    let splitUp: () -> Void
     let closePane: () -> Void
 }
 

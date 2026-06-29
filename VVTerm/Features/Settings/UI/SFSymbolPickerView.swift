@@ -217,6 +217,7 @@ struct SFSymbolPickerView: View {
         .onChange(of: selectedCategory) { _ in
             displayLimit = pageSize
         }
+        .adaptiveSoftScrollEdges()
     }
 
     // MARK: - Header

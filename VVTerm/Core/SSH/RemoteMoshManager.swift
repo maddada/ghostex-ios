@@ -26,7 +26,7 @@ actor RemoteMoshManager {
         portRange: ClosedRange<Int> = 60001...61000
     ) async throws -> MoshServerConnectInfo {
         let terminalType = await client.remoteTerminalType()
-        let resolvedStartup = RemoteTerminalBootstrap.moshStartupScript(
+        let resolvedStartup = moshChildStartupScript(
             startCommand: startCommand,
             terminalType: terminalType
         )
@@ -71,10 +71,7 @@ actor RemoteMoshManager {
         case .permissionDenied:
             return .moshBootstrapFailed("Permission denied while starting mosh-server")
         case .invalidConnectLine:
-            if let output, !output.isEmpty {
-                return .moshBootstrapFailed("Invalid mosh-server response: \(output.trimmingCharacters(in: .whitespacesAndNewlines))")
-            }
-            return .moshBootstrapFailed("Invalid mosh-server response")
+            return mapInvalidConnectLine(output: output)
         case .invalidPort:
             return .moshBootstrapFailed("mosh-server returned an invalid port")
         case .invalidKey:
@@ -131,16 +128,82 @@ actor RemoteMoshManager {
         """
     }
 
+    nonisolated func moshChildStartupScript(
+        startCommand: String?,
+        terminalType: RemoteTerminalType = RemoteTerminalBootstrap.defaultTerminalType
+    ) -> String {
+        """
+        \(utf8LocaleExportScript());
+        \(RemoteTerminalBootstrap.moshStartupScript(startCommand: startCommand, terminalType: terminalType))
+        """
+    }
+
     nonisolated func utf8LocaleExportScript() -> String {
         """
-        VVTERM_UTF8_LOCALE="";
-        if command -v locale >/dev/null 2>&1; then
-          VVTERM_UTF8_LOCALE="$(locale -a 2>/dev/null | awk 'BEGIN { IGNORECASE = 1 } /^(C\\\\.UTF-8|C\\\\.utf8|en_US\\\\.UTF-8|en_US\\\\.utf8|UTF-8|utf8)$/ { print; exit }')";
-        fi;
-        if [ -z "$VVTERM_UTF8_LOCALE" ]; then VVTERM_UTF8_LOCALE="C.UTF-8"; fi;
-        export LANG="$VVTERM_UTF8_LOCALE";
-        export LC_ALL="$VVTERM_UTF8_LOCALE";
-        export LC_CTYPE="$VVTERM_UTF8_LOCALE"
+        vvterm_validate_utf8_locale() {
+          [ -n "$1" ] || return 1;
+          VVTERM_TEST_CHARMAP="$(LANG="$1" LC_ALL="$1" LC_CTYPE="$1" locale charmap 2>/dev/null)" || return 1;
+          case "$VVTERM_TEST_CHARMAP" in *[Uu][Tt][Ff]*8*) return 0 ;; *) return 1 ;; esac
+        };
+        VVTERM_CURRENT_CHARMAP="$(locale charmap 2>/dev/null || true)";
+        case "$VVTERM_CURRENT_CHARMAP" in
+          *[Uu][Tt][Ff]*8*) VVTERM_UTF8_LOCALE="" ;;
+          *)
+            VVTERM_UTF8_LOCALE="";
+            for VVTERM_LOCALE_CANDIDATE in "${LC_ALL:-}" "${LC_CTYPE:-}" "${LANG:-}" C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+              if vvterm_validate_utf8_locale "$VVTERM_LOCALE_CANDIDATE"; then
+                VVTERM_UTF8_LOCALE="$VVTERM_LOCALE_CANDIDATE";
+                break;
+              fi;
+            done;
+            if [ -z "$VVTERM_UTF8_LOCALE" ] && command -v locale >/dev/null 2>&1; then
+              for VVTERM_LOCALE_CANDIDATE in $(locale -a 2>/dev/null || true); do
+                case "$VVTERM_LOCALE_CANDIDATE" in
+                  *[Uu][Tt][Ff]*8*)
+                    if vvterm_validate_utf8_locale "$VVTERM_LOCALE_CANDIDATE"; then
+                      VVTERM_UTF8_LOCALE="$VVTERM_LOCALE_CANDIDATE";
+                      break;
+                    fi
+                    ;;
+                esac;
+              done;
+            fi;
+            if [ -n "$VVTERM_UTF8_LOCALE" ]; then
+              export LANG="$VVTERM_UTF8_LOCALE";
+              export LC_ALL="$VVTERM_UTF8_LOCALE";
+              export LC_CTYPE="$VVTERM_UTF8_LOCALE";
+            fi
+            ;;
+        esac;
+        unset VVTERM_CURRENT_CHARMAP VVTERM_LOCALE_CANDIDATE VVTERM_TEST_CHARMAP;
+        unset -f vvterm_validate_utf8_locale 2>/dev/null || true
         """
+    }
+
+    nonisolated func mapInvalidConnectLine(output: String?) -> SSHError {
+        guard let output else {
+            return .moshBootstrapFailed("Invalid mosh-server response")
+        }
+        return .moshBootstrapFailed(bootstrapMessage(for: output))
+    }
+
+    nonisolated func bootstrapMessage(for output: String) -> String {
+        let sanitized = sanitizedBootstrapOutput(output)
+        guard !sanitized.isEmpty else {
+            return "Invalid mosh-server response"
+        }
+        let lowercased = sanitized.lowercased()
+        if lowercased.contains("utf-8") || lowercased.contains("utf8") || lowercased.contains("locale") {
+            return "mosh-server could not start with a UTF-8 locale: \(sanitized)"
+        }
+        return "Invalid mosh-server response: \(sanitized)"
+    }
+
+    nonisolated func sanitizedBootstrapOutput(_ output: String) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let maxLength = 1_500
+        guard trimmed.count > maxLength else { return trimmed }
+        return String(trimmed.prefix(maxLength)) + "..."
     }
 }

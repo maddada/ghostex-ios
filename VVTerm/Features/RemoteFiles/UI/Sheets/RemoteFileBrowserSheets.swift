@@ -49,6 +49,7 @@ struct RemoteFileRenameSheet: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(alignment: .leading, spacing: 18) {
             Text(String(localized: "Rename"))
@@ -147,6 +148,7 @@ struct RemoteFileCreateFolderSheet: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(alignment: .leading, spacing: 18) {
             Text(String(localized: "New Folder"))
@@ -298,6 +300,7 @@ struct RemoteFileMoveSheet: View {
         .task(id: currentDirectory) {
             await loadDirectories()
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private var moveContent: some View {
@@ -495,6 +498,7 @@ struct RemoteFileDeleteConfirmationSheet: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(alignment: .leading, spacing: 18) {
             Text(String(localized: "Delete"))
@@ -597,6 +601,7 @@ struct RemoteFilePermissionEditorSheet: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(spacing: 0) {
             content

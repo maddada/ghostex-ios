@@ -4,7 +4,6 @@ import SwiftUI
 
 struct ServerSidebarView: View {
     @ObservedObject var serverManager: ServerManager
-    let backgroundColor: Color
     @Binding var selectedWorkspace: Workspace?
     @Binding var selectedServer: Server?
 
@@ -191,6 +190,7 @@ struct ServerSidebarView: View {
                 serverManager: serverManager,
                 selectedWorkspace: $selectedWorkspace
             )
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingAddServer) {
             ServerFormSheet(
@@ -199,6 +199,7 @@ struct ServerSidebarView: View {
                 prefill: addServerPrefill,
                 onSave: { _ in showingAddServer = false }
             )
+            .adaptiveSoftScrollEdges()
             #if os(macOS)
             .frame(
                 minWidth: 640,
@@ -215,6 +216,7 @@ struct ServerSidebarView: View {
                 queuedDiscoveryPrefill = ServerFormPrefill(discoveredHost: discoveredHost)
                 showingLocalDiscovery = false
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverToEdit) { server in
             ServerFormSheet(
@@ -226,6 +228,7 @@ struct ServerSidebarView: View {
                     serverToEdit = nil
                 }
             )
+            .adaptiveSoftScrollEdges()
             #if os(macOS)
             .frame(
                 minWidth: 640,
@@ -246,6 +249,7 @@ struct ServerSidebarView: View {
                     serverToMove = nil
                 }
             )
+            .adaptiveSoftScrollEdges()
             #if os(macOS)
             .frame(
                 minWidth: 520,
@@ -259,8 +263,9 @@ struct ServerSidebarView: View {
         }
         .sheet(isPresented: $showingSupport) {
             SupportSheet()
+                .adaptiveSoftScrollEdges()
         }
-        .proUpgradePresentation(isPresented: $showingProUpgrade)
+        .proUpgradePresentation(isPresented: $showingProUpgrade, source: .sidebarBanner)
         .sheet(isPresented: $showingCreateEnvironment) {
             if let workspace = selectedWorkspace {
                 EnvironmentFormSheet(
@@ -271,6 +276,7 @@ struct ServerSidebarView: View {
                         showingCreateEnvironment = false
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
         }
         .sheet(item: $editingEnvironment) { environment in
@@ -284,6 +290,7 @@ struct ServerSidebarView: View {
                         editingEnvironment = nil
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
         }
         .alert(String(localized: "Delete Environment?"), isPresented: Binding(
@@ -318,6 +325,7 @@ struct ServerSidebarView: View {
         .proFeatureAlert(
             title: String(localized: "Custom Environments"),
             message: String(localized: "Upgrade to Pro for custom environments"),
+            source: .customEnvironment,
             isPresented: $showingCustomEnvironmentAlert
         )
         .onChange(of: showingLocalDiscovery) { isPresented in
@@ -342,6 +350,15 @@ struct ServerSidebarView: View {
         .focusedValue(\.openLocalSSHDiscovery, {
             showingLocalDiscovery = true
         })
+        // The sidebar is hosted in its own NSHostingController, so the
+        // focusedValue above can't reach the scene Commands. Register the action
+        // on the shell command bridge too; ContentView republishes it.
+        .onAppear {
+            MacShellCommandBridge.shared.openLocalDiscovery = { showingLocalDiscovery = true }
+        }
+        .onDisappear {
+            MacShellCommandBridge.shared.openLocalDiscovery = nil
+        }
         #endif
         .lockedItemAlert(
             .server,
@@ -351,7 +368,6 @@ struct ServerSidebarView: View {
                 set: { if !$0 { lockedServerAlert = nil } }
             )
         )
-        .background(backgroundColor)
     }
 
     // MARK: - Server Controls (Filter + Search)
@@ -388,7 +404,7 @@ struct ServerSidebarView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help(serverSearchVisible ? "Hide search" : "Search servers")
+            .help(serverSearchVisible ? String(localized: "Hide search") : String(localized: "Search servers"))
         }
     }
 
@@ -710,13 +726,6 @@ struct ServerSidebarView: View {
                     Text("Add Server")
                 }
                 .buttonStyle(.bordered)
-
-                Button {
-                    showingLocalDiscovery = true
-                } label: {
-                    Label(String(localized: "Discover Local Devices"), systemImage: "dot.radiowaves.left.and.right")
-                }
-                .buttonStyle(.borderless)
             }
             Spacer()
         }

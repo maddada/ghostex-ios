@@ -33,6 +33,7 @@ struct TerminalContainerView: View {
     @State private var reconnectInFlight = false
     @State private var connectWatchdogToken = UUID()
     @State private var hasEstablishedConnection = false
+    @State private var showingRetrustHostConfirmation = false
     @StateObject private var richPasteUI = TerminalRichPasteUIModel()
     @AppStorage("sshAutoReconnect") private var autoReconnectEnabled = true
 
@@ -99,6 +100,23 @@ struct TerminalContainerView: View {
 
     private var connectionState: ConnectionState {
         session.connectionState
+    }
+
+    private var isHostKeyVerificationFailure: Bool {
+        guard case .failed(let error) = connectionState else { return false }
+        return error == SSHError.hostKeyVerificationFailed.localizedDescription
+            || error.contains("Host key verification failed")
+    }
+
+    private var retrustHostConfirmationMessage: String {
+        guard let server else {
+            return String(localized: "VVTerm will forget the saved SSH host key and reconnect.")
+        }
+        let endpoint = "\(server.host):\(server.port)"
+        return String(
+            format: String(localized: "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
+            endpoint
+        )
     }
 
     private var shouldAttemptConnection: Bool {
@@ -330,6 +348,14 @@ struct TerminalContainerView: View {
         } message: {
             Text("Mosh is selected for this server, but mosh-server is missing on the host.")
         }
+        .alert("Replace Trusted Host?", isPresented: $showingRetrustHostConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Replace and Reconnect", role: .destructive) {
+                retrustHostAndRetry()
+            }
+        } message: {
+            Text(retrustHostConfirmationMessage)
+        }
         #if os(macOS)
         .onAppear {
             setupKeyMonitor()
@@ -550,6 +576,12 @@ struct TerminalContainerView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
+                            if isHostKeyVerificationFailure {
+                                Button("Trust New Host Key") {
+                                    showingRetrustHostConfirmation = true
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
                             Button("Retry") {
                                 Task { await retryConnection() }
                             }
@@ -623,6 +655,12 @@ struct TerminalContainerView: View {
     private func disableTmuxForServer() {
         guard let server else { return }
         ConnectionSessionManager.shared.disableTmux(for: server.id)
+    }
+
+    private func retrustHostAndRetry() {
+        guard let server else { return }
+        KnownHostsManager.shared.remove(host: server.host, port: server.port)
+        Task { await retryConnection() }
     }
 
     private func attemptAutoReconnectIfNeeded() {
@@ -750,16 +788,6 @@ struct TerminalContainerView: View {
             },
             isProcessing: $voiceProcessing
         )
-        .padding(.vertical, 10)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: 500)
-        .adaptiveGlass()
-        .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
     }
     #endif
 

@@ -97,6 +97,7 @@ struct RemoteFileInspectorView: View {
         }
         .sheet(item: $presentedMediaPreview) { item in
             RemoteFileExpandedMediaPreview(item: item)
+                .adaptiveSoftScrollEdges()
         }
     }
 
@@ -1235,6 +1236,7 @@ private struct RemoteFileExpandedMediaPreview: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(spacing: 0) {
             HStack {

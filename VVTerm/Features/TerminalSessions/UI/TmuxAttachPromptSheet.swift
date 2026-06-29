@@ -27,6 +27,7 @@ struct TmuxAttachPromptSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled()
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(spacing: 0) {
             macHeader

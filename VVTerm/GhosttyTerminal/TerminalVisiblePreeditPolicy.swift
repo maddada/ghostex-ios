@@ -1,10 +1,20 @@
 import Foundation
 
 enum TerminalVisiblePreeditPolicy {
+    static func isDictationInputMode(_ inputModePrimaryLanguage: String?) -> Bool {
+        inputModePrimaryLanguage?.lowercased() == "dictation"
+    }
+
     static func shouldDisplay(_ text: String, inputModePrimaryLanguage: String?) -> Bool {
         let normalized = text.precomposedStringWithCanonicalMapping
         let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+
+        if isDictationInputMode(inputModePrimaryLanguage) {
+            // Show in-progress dictation text regardless of script so the user
+            // gets live feedback while the buffer is still revisable.
+            return true
+        }
 
         if containsNativePreeditScript(in: normalized) {
             return true

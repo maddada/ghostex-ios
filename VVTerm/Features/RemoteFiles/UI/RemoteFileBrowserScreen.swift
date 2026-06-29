@@ -333,6 +333,7 @@ struct RemoteFileBrowserScreen: View {
             RemoteFileImportPicker { result in
                 handleUploadSelection(result, for: request)
             }
+            .adaptiveSoftScrollEdges()
         }
         #endif
         .fileExporter(
@@ -362,6 +363,7 @@ struct RemoteFileBrowserScreen: View {
             RemoteFileShareSheet(item: item) {
                 finishSharing(item)
             }
+            .adaptiveSoftScrollEdges()
         }
         #endif
         #if os(iOS)
@@ -379,6 +381,7 @@ struct RemoteFileBrowserScreen: View {
                     onCancel: resetNewFolderPrompt,
                     onCreate: createFolder
                 )
+                .adaptiveSoftScrollEdges()
             }
         }
         #endif
@@ -391,18 +394,22 @@ struct RemoteFileBrowserScreen: View {
         #if os(iOS)
         .sheet(item: $renameTargetEntry, onDismiss: resetRenamePrompt) { entry in
             renameSheet(entry: entry)
+                .adaptiveSoftScrollEdges()
         }
         #endif
         .sheet(item: $moveTargetEntry, onDismiss: resetMovePrompt) { entry in
             moveSheet(entry: entry)
+                .adaptiveSoftScrollEdges()
         }
         #if os(iOS)
         .sheet(item: $deleteTargetEntry, onDismiss: { deleteTargetEntry = nil }) { entry in
             deleteSheet(entry: entry)
+                .adaptiveSoftScrollEdges()
         }
         #endif
         .sheet(item: $permissionTargetEntry, onDismiss: resetPermissionEditor) { entry in
             permissionSheet(entry: entry)
+                .adaptiveSoftScrollEdges()
         }
         .onChange(of: snapshot.currentPath) { newValue in
             onCurrentPathChange(newValue)

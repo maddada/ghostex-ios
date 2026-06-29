@@ -33,6 +33,9 @@ struct ConnectionTerminalContainer: View {
 
     /// Disconnect confirmation
     @State private var showingDisconnectConfirmation = false
+    /// Confirmation before closing the focused split pane via a command/panel
+    /// (the in-pane close button has its own confirmation in TerminalTabView).
+    @State private var showingPaneCloseConfirmation = false
     @State private var serverToEdit: Server?
 
     /// Tab limit alert
@@ -51,6 +54,10 @@ struct ConnectionTerminalContainer: View {
 
     private var visibleViewTabs: [ConnectionViewTab] {
         viewTabConfig.currentVisibleTabs
+    }
+
+    private var shouldShowViewPicker: Bool {
+        visibleViewTabs.count > 1
     }
 
     private var effectiveThemeName: String {
@@ -118,7 +125,9 @@ struct ConnectionTerminalContainer: View {
                       let tab = serverFileTabs.first(where: { $0.id == newValue }) else {
                     return
                 }
-                fileTabManager.selectTab(tab)
+                DispatchQueue.main.async {
+                    fileTabManager.selectTab(tab)
+                }
             }
         )
     }
@@ -218,6 +227,7 @@ struct ConnectionTerminalContainer: View {
                         tabManager.resolveTmuxAttachPrompt(paneId: prompt.id, selection: selection)
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
     }
 
@@ -250,7 +260,7 @@ struct ConnectionTerminalContainer: View {
                     .id(selectedFileTab.id)
                     .zIndex(1)
                 } else {
-                    RemoteFileTabsEmptyState {
+                    RemoteFileTabsEmptyState(server: server) {
                         openNewFileTab(selectFilesViewOnSuccess: false)
                     }
                     .zIndex(1)
@@ -310,8 +320,11 @@ struct ConnectionTerminalContainer: View {
         guard selectedView == ConnectionViewTab.files.id else { return }
 
         let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
-        guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
-        fileBrowser.prepareNewTab(fileTab, duplicating: nil)
+        DispatchQueue.main.async {
+            guard selectedView == ConnectionViewTab.files.id else { return }
+            guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
+            fileBrowser.prepareNewTab(fileTab, duplicating: nil)
+        }
     }
 
     private func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
@@ -435,7 +448,14 @@ struct ConnectionTerminalContainer: View {
                 if selectedView == ConnectionViewTab.files.id {
                     closeSelectedFileTab()
                 } else if let selectedTab {
-                    tabManager.closeTab(selectedTab)
+                    // Close the focused split pane first (with confirmation,
+                    // since it terminates an SSH connection); only close the
+                    // whole tab once it's the last remaining pane.
+                    if selectedTab.paneCount > 1 {
+                        requestCloseFocusedPane()
+                    } else {
+                        tabManager.closeTab(selectedTab)
+                    }
                 }
             },
             selectPrevious: {
@@ -451,8 +471,37 @@ struct ConnectionTerminalContainer: View {
                 } else {
                     selectNextTab()
                 }
+            },
+            selectIndex: { index in
+                if selectedView == ConnectionViewTab.files.id {
+                    selectFileTab(at: index)
+                } else {
+                    selectTab(at: index)
+                }
             }
         )
+    }
+
+    private func selectTab(at index: Int) {
+        guard serverTabs.indices.contains(index) else { return }
+        selectedTabIdBinding.wrappedValue = serverTabs[index].id
+    }
+
+    private func selectFileTab(at index: Int) {
+        guard serverFileTabs.indices.contains(index) else { return }
+        fileTabManager.selectTab(serverFileTabs[index])
+    }
+
+    /// Ask before closing the focused pane (terminates its SSH connection),
+    /// matching the in-pane close button's confirmation.
+    private func requestCloseFocusedPane() {
+        guard selectedTab != nil else { return }
+        showingPaneCloseConfirmation = true
+    }
+
+    private func closeFocusedPaneConfirmed() {
+        guard let selectedTab else { return }
+        tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
     }
 
     private func updateTerminalBackgroundColor() {
@@ -472,21 +521,21 @@ struct ConnectionTerminalContainer: View {
         sharedBody
             .focusedValue(\.openTerminalTab, handleNewTabCommand)
             .focusedValue(\.serverViewTabActions, serverViewTabActions())
-            .toolbar {
-                if !isZenModeEnabled {
-                    viewPickerToolbarItem
-                    if (selectedView == "terminal" && !serverTabs.isEmpty) || selectedView == "files" {
-                        tabsToolbarSpacer
-                        tabsToolbarItem
-                    }
-                    toolbarSpacer
-                    trailingToolbarItems
-                } else {
-                    ToolbarItem(placement: .primaryAction) {
-                        zenModePanelToolbarButton
-                    }
-                }
+            // The connected-server toolbar is rendered by the AppKit NSToolbar
+            // (see MacConnectionToolbar). This pane publishes its sections into
+            // the shared bridge; the toolbar hosts them.
+            .onAppear { activateToolbarBridge(); updateCommandBridge() }
+            .onDisappear {
+                MacToolbarBridge.shared.deactivate(ownerId: server.id.uuidString)
+                MacShellCommandBridge.shared.clear(ownerId: server.id.uuidString)
             }
+            .onChange(of: selectedView) { _ in activateToolbarBridge(); updateCommandBridge() }
+            .onChange(of: shouldShowViewPicker) { _ in activateToolbarBridge() }
+            .onChange(of: serverTabs.count) { _ in activateToolbarBridge() }
+            .onChange(of: serverFileTabs.count) { _ in activateToolbarBridge() }
+            .onChange(of: selectedFileTabId) { _ in activateToolbarBridge() }
+            .onChange(of: selectedTabId) { _ in activateToolbarBridge(); updateCommandBridge() }
+            .onChange(of: isZenModeEnabled) { _ in activateToolbarBridge() }
             .alert(
                 disconnectAlertTitle,
                 isPresented: $showingDisconnectConfirmation,
@@ -499,6 +548,15 @@ struct ConnectionTerminalContainer: View {
             } message: {
                 Text(disconnectAlertMessage)
             }
+            .alert("Close this terminal?", isPresented: $showingPaneCloseConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Close", role: .destructive) {
+                    closeFocusedPaneConfirmed()
+                }
+                .keyboardShortcut(.defaultAction)
+            } message: {
+                Text("The SSH connection will be terminated.")
+            }
             .sheet(item: $serverToEdit) { editingServer in
                 ServerFormSheet(
                     serverManager: serverManager,
@@ -508,6 +566,7 @@ struct ConnectionTerminalContainer: View {
                         serverToEdit = nil
                     }
                 )
+                .adaptiveSoftScrollEdges()
                 .frame(
                     minWidth: 640,
                     idealWidth: 700,
@@ -519,11 +578,137 @@ struct ConnectionTerminalContainer: View {
             }
     }
 
-    @ToolbarContentBuilder
-    private var viewPickerToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            viewPickerControl
+    /// Publishes this server's toolbar content to the AppKit toolbar bridge,
+    /// which renders it with native controls.
+    private func activateToolbarBridge() {
+        MacToolbarBridge.shared.activate(
+            ownerId: server.id.uuidString,
+            showsViewPicker: shouldShowViewPicker,
+            showsTabStrip: (selectedView == ConnectionViewTab.terminal.id && !serverTabs.isEmpty)
+                || (selectedView == ConnectionViewTab.files.id && !serverFileTabs.isEmpty),
+            showsFilesMenu: selectedView == ConnectionViewTab.files.id,
+            isZenMode: isZenModeEnabled,
+            zenTitle: server.name,
+            zenIcon: "server.rack",
+            zenSubtitle: { zenSubtitleText },
+            viewPicker: { toolbarViewPickerData() },
+            tabStrip: { AnyView(tabsToolbarView) },
+            filesMenu: { toolbarFilesMenuEntries() },
+            serverMenu: { toolbarServerMenuEntries() },
+            onEnterZen: {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                    isZenModeEnabled = true
+                }
+            },
+            zenPanelContent: { AnyView(zenPanelView) }
+        )
+    }
+
+    /// Subtitle shown under the server name in zen, derived entirely from live
+    /// in-memory state (no persistence / metadata mutation): the focused pane's
+    /// runtime title for terminal, the current directory for files, otherwise
+    /// the view's own name (e.g. Stats).
+    private var zenSubtitleText: String {
+        if selectedView == ConnectionViewTab.files.id {
+            guard let tab = selectedFileTab else { return "" }
+            return fileBrowser.currentPath(for: tab)
         }
+        if selectedView == ConnectionViewTab.terminal.id {
+            guard let selectedTab else { return "" }
+            return tabManager.displayTitle(for: selectedTab)
+        }
+        if let tab = ConnectionViewTab.from(id: selectedView) {
+            return String(localized: String.LocalizationValue(tab.localizedKey))
+        }
+        return ""
+    }
+
+    /// Publishes this server's keyboard-command actions to the command bridge,
+    /// which ContentView republishes as scene focus values for the menu commands.
+    private func updateCommandBridge() {
+        MacShellCommandBridge.shared.update(
+            ownerId: server.id.uuidString,
+            serverViewTabActions: serverViewTabActions(),
+            splitActions: TerminalSplitActions(
+                splitHorizontal: { splitFocusedPane(.right) },
+                splitVertical: { splitFocusedPane(.down) },
+                splitLeft: { splitFocusedPane(.left) },
+                splitUp: { splitFocusedPane(.up) },
+                closePane: { requestCloseFocusedPane() }
+            ),
+            activeServerId: server.id,
+            activePaneId: selectedTab?.focusedPaneId
+        )
+    }
+
+    private func toolbarViewPickerData() -> ToolbarViewPickerData {
+        ToolbarViewPickerData(
+            segments: visibleViewTabs.map { tab in
+                ToolbarViewPickerData.Segment(
+                    id: tab.id,
+                    systemImage: tab.icon,
+                    help: tab.id.capitalized
+                )
+            },
+            selectedId: selectedView,
+            onSelect: { newValue in
+                selectedViewBinding.wrappedValue = newValue
+            }
+        )
+    }
+
+    private func toolbarFilesMenuEntries() -> [ToolbarMenuEntry] {
+        let tab = selectedFileTab
+        let currentPath = tab.map { fileBrowser.currentPath(for: $0) } ?? "/"
+        let hiddenVisible = tab.map { fileBrowser.showHiddenFiles(for: $0) } ?? false
+        let hasTab = tab != nil
+
+        return [
+            ToolbarMenuEntry(title: String(localized: "Parent"), systemImage: "arrow.turn.up.left", isEnabled: hasTab && currentPath != "/") {
+                guard let tab = selectedFileTab else { return }
+                Task { await fileBrowser.goUp(in: tab, server: server) }
+            },
+            ToolbarMenuEntry(title: String(localized: "Refresh"), systemImage: "arrow.clockwise", isEnabled: hasTab) {
+                guard let tab = selectedFileTab else { return }
+                Task { await fileBrowser.refresh(server: server, tab: tab) }
+            },
+            .separator,
+            ToolbarMenuEntry(title: String(localized: "Upload…"), systemImage: "square.and.arrow.up", isEnabled: hasTab) {
+                guard let tab = selectedFileTab else { return }
+                fileBrowser.requestUploadPicker(for: tab, destinationPath: currentPath)
+            },
+            ToolbarMenuEntry(title: String(localized: "New Folder…"), systemImage: "folder.badge.plus", isEnabled: hasTab) {
+                guard let tab = selectedFileTab else { return }
+                fileBrowser.requestCreateFolder(for: tab, destinationPath: currentPath)
+            },
+            ToolbarMenuEntry(
+                title: hiddenVisible ? String(localized: "Hide Hidden Files") : String(localized: "Show Hidden Files"),
+                systemImage: hiddenVisible ? "eye.slash" : "eye",
+                isEnabled: hasTab
+            ) {
+                guard let tab = selectedFileTab else { return }
+                fileBrowser.setShowHiddenFiles(!hiddenVisible, for: tab)
+            },
+            .separator,
+            ToolbarMenuEntry(title: String(localized: "Copy Path"), systemImage: "document.on.document") {
+                Clipboard.copy(currentPath)
+            }
+        ]
+    }
+
+    private func toolbarServerMenuEntries() -> [ToolbarMenuEntry] {
+        [
+            ToolbarMenuEntry(title: String(localized: "Settings"), systemImage: "gear") {
+                SettingsWindowManager.shared.show()
+            },
+            ToolbarMenuEntry(title: String(localized: "Edit Server"), systemImage: "pencil") {
+                serverToEdit = server
+            },
+            .separator,
+            ToolbarMenuEntry(title: String(localized: "Disconnect"), systemImage: "xmark.circle", isDestructive: true) {
+                showingDisconnectConfirmation = true
+            }
+        ]
     }
 
     private var viewPickerControl: some View {
@@ -534,27 +719,18 @@ struct ConnectionTerminalContainer: View {
             }
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .padding(.horizontal, 4)
     }
 
-    @ToolbarContentBuilder
-    private var tabsToolbarSpacer: some ToolbarContent {
-        if #available(macOS 26.0, *) {
-            ToolbarSpacer(.fixed, placement: .navigation)
-        } else {
-            ToolbarItem(placement: .navigation) {
-                Color.clear
-                    .frame(width: 8, height: 1)
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var tabsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+    @ViewBuilder
+    private var tabsToolbarView: some View {
             if selectedView == ConnectionViewTab.files.id {
                 RemoteFileTabsScrollView(
                     tabs: serverFileTabs,
                     selectedTabId: selectedFileTabIdBinding,
+                    fileBrowser: fileBrowser,
                     titleForTab: displayedFileTabTitle(for:),
                     onSelect: { fileTabManager.selectTab($0) },
                     onClose: { tab in
@@ -598,31 +774,6 @@ struct ConnectionTerminalContainer: View {
                     tabManager: tabManager
                 )
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarSpacer: some ToolbarContent {
-        ToolbarItem(placement: .automatic) {
-            Spacer()
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var trailingToolbarItems: some ToolbarContent {
-        if selectedView == "files" {
-            ToolbarItem(placement: .primaryAction) {
-                filesActionsToolbarButton
-            }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            zenModeToolbarButton
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            serverMenuToolbarButton
-        }
     }
 
     private var zenModeToolbarButton: some View {
@@ -727,17 +878,10 @@ struct ConnectionTerminalContainer: View {
         .help(Text("Server Options"))
     }
 
-    private var zenModePanelToolbarButton: some View {
-        Button {
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
-                showingZenPanel.toggle()
-            }
-        } label: {
-            Label("Zen", systemImage: "slider.horizontal.3")
-                .labelStyle(.iconOnly)
-        }
-        .help(Text(showingZenPanel ? "Hide Zen controls" : "Show Zen controls"))
-        .popover(isPresented: $showingZenPanel, arrowEdge: .top) {
+    /// The rich Zen controls panel, hosted inside the native zen toolbar
+    /// button's menu (NSMenuItem.view) so we get a native circle button AND the
+    /// full panel.
+    private var zenPanelView: some View {
             MacOSZenModePanel(
                 width: 360,
                 serverName: server.name,
@@ -748,6 +892,7 @@ struct ConnectionTerminalContainer: View {
                 viewTabs: visibleViewTabs,
                 terminalTabs: serverTabs,
                 selectedTerminalTabId: selectedTabIdBinding,
+                terminalTabTitle: { tabManager.displayTitle(for: $0) },
                 paneState: { tab in
                     tabManager.paneStates[tab.focusedPaneId]
                 },
@@ -788,15 +933,12 @@ struct ConnectionTerminalContainer: View {
                     fileTabManager.selectTab(tab)
                 },
                 onSplitRight: {
-                    splitFocusedPane(.horizontal)
+                    splitFocusedPane(.right)
                 },
                 onSplitDown: {
-                    splitFocusedPane(.vertical)
+                    splitFocusedPane(.down)
                 },
-                onClosePane: {
-                    guard let selectedTab else { return }
-                    tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
-                },
+                onClosePane: { requestCloseFocusedPane() },
                 canSplit: selectedTab != nil,
                 canClosePane: selectedTab != nil,
                 isSidebarVisible: isSidebarVisible,
@@ -831,7 +973,8 @@ struct ConnectionTerminalContainer: View {
                     }
                 }
             )
-        }
+            .adaptiveSoftScrollEdges()
+            .frame(width: 360)
     }
 
     private func disconnectFromServer() {
@@ -841,7 +984,7 @@ struct ConnectionTerminalContainer: View {
         tabManager.connectedServerIds.remove(server.id)
     }
 
-    private func splitFocusedPane(_ direction: TerminalSplitDirection) {
+    private func splitFocusedPane(_ placement: TerminalSplitPlacement) {
         guard let selectedTab else { return }
         guard StoreManager.shared.isPro else {
             showingZenPanel = false
@@ -849,11 +992,15 @@ struct ConnectionTerminalContainer: View {
             return
         }
 
-        switch direction {
-        case .horizontal:
-            _ = tabManager.splitHorizontal(tab: selectedTab, paneId: selectedTab.focusedPaneId)
-        case .vertical:
-            _ = tabManager.splitVertical(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+        switch placement {
+        case .right:
+            _ = tabManager.splitRight(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+        case .left:
+            _ = tabManager.splitLeft(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+        case .down:
+            _ = tabManager.splitDown(tab: selectedTab, paneId: selectedTab.focusedPaneId)
+        case .up:
+            _ = tabManager.splitUp(tab: selectedTab, paneId: selectedTab.focusedPaneId)
         }
     }
     #endif
@@ -1100,48 +1247,26 @@ struct TerminalTabsScrollView: View {
     @ObservedObject var tabManager: TerminalTabManager
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Navigation arrows
-            HStack(spacing: 4) {
-                ServerViewTabNavigationButton(
-                    icon: "chevron.left",
-                    action: { selectPrevious() },
-                    help: String(localized: "Previous tab")
-                )
-                .disabled(tabs.count <= 1)
-
-                ServerViewTabNavigationButton(
-                    icon: "chevron.right",
-                    action: { selectNext() },
-                    help: String(localized: "Next tab")
-                )
-                .disabled(tabs.count <= 1)
-            }
-            .padding(.leading, 8)
-
-            // Tabs scroll view
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(tabs, id: \.id) { tab in
-                        TerminalTabButton(
-                            tab: tab,
-                            isSelected: selectedTabId == tab.id,
-                            onSelect: { selectedTabId = tab.id },
-                            onClose: { onClose(tab) },
-                            tabManager: tabManager
-                        )
-                    }
-                }
-                .padding(.horizontal, 6)
-            }
-            .frame(maxWidth: 600, maxHeight: 36)
-
-            // New tab button
-            ServerViewNewTabButton(
-                help: String(localized: "New terminal tab"),
-                action: onNew
+        ServerToolbarTabStrip(
+            items: tabs,
+            selectedId: selectedTabId,
+            previousHelp: String(localized: "Previous tab"),
+            nextHelp: String(localized: "Next tab"),
+            newHelp: String(localized: "New terminal tab"),
+            onPrevious: selectPrevious,
+            onNext: selectNext,
+            onNew: onNew
+        ) { tab, tabWidth, glassNamespace in
+            TerminalTabButton(
+                tab: tab,
+                isSelected: selectedTabId == tab.id,
+                width: tabWidth,
+                glassNamespace: glassNamespace,
+                shortcutNumber: tabs.firstIndex(where: { $0.id == tab.id }).map { $0 + 1 },
+                onSelect: { selectedTabId = tab.id },
+                onClose: { onClose(tab) },
+                tabManager: tabManager
             )
-            .padding(.trailing, 8)
         }
     }
 
@@ -1165,11 +1290,12 @@ struct TerminalTabsScrollView: View {
 struct TerminalTabButton: View {
     let tab: TerminalTab
     let isSelected: Bool
+    let width: CGFloat
+    var glassNamespace: Namespace.ID?
+    var shortcutNumber: Int?
     let onSelect: () -> Void
     let onClose: () -> Void
     @ObservedObject var tabManager: TerminalTabManager
-
-    @State private var isHovering = false
 
     /// Get pane state for the focused pane
     private var paneState: TerminalPaneState? {
@@ -1187,50 +1313,23 @@ struct TerminalTabButton: View {
     }
 
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 6) {
-                // Close button (like Aizen's DetailCloseButton)
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 14, height: 14)
-                        .background(
-                            Circle()
-                                .fill(Color.primary.opacity(isHovering ? 0.1 : 0))
-                        )
-                }
-                .buttonStyle(.plain)
+        ServerToolbarTabCell(
+            title: tabTitle,
+            isSelected: isSelected,
+            statusColor: statusColor,
+            width: width,
+            accessibilityLabel: tabManager.displayTitle(for: tab),
+            glassNamespace: glassNamespace,
+            shortcutNumber: shortcutNumber,
+            onSelect: onSelect,
+            onClose: onClose
+        )
+    }
 
-                // Status indicator
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 6, height: 6)
-
-                // Title
-                Text(tab.title)
-                    .font(.callout)
-                    .lineLimit(1)
-
-                // Pane count indicator (if splits)
-                if tab.paneCount > 1 {
-                    Text(verbatim: "⊞")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, 12)
-            .padding(.vertical, 6)
-            .background(
-                isSelected ?
-                Color(nsColor: .separatorColor) :
-                (isHovering ? Color(nsColor: .separatorColor).opacity(0.5) : Color.clear),
-                in: Capsule()
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+    private var tabTitle: String {
+        let title = tabManager.displayTitle(for: tab)
+        guard tab.paneCount > 1 else { return title }
+        return "\(title) ⊞"
     }
 }
 #endif

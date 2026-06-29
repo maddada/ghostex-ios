@@ -427,12 +427,14 @@ struct ServerFormSheet: View {
                 }
             }
         #endif
+            .adaptiveSoftScrollEdges()
             .sheet(isPresented: $showingAddKeySheet) {
                 AddSSHKeySheet(onSave: { entry in
                     storedKeys = KeychainManager.shared.getStoredSSHKeys()
                     selectedStoredKey = entry
                     loadStoredKey(entry)
                 })
+                .adaptiveSoftScrollEdges()
             }
             .sheet(isPresented: $showingCreateWorkspace) {
                 WorkspaceFormSheet(
@@ -441,11 +443,13 @@ struct ServerFormSheet: View {
                         selectedWorkspaceId = workspace.id
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
             .sheet(isPresented: $showingLocalDiscoverySheet) {
                 LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
                     applyPrefill(ServerFormPrefill(discoveredHost: discoveredHost))
                 }
+                .adaptiveSoftScrollEdges()
             }
             .limitReachedAlert(.servers, isPresented: $showingServerLimitAlert)
             .onAppear {
@@ -596,7 +600,10 @@ struct ServerFormSheet: View {
             Section {
                 ProLimitBanner(
                     title: String(localized: "Server Limit Reached"),
-                    message: String(format: String(localized: "You've reached the limit of %lld servers. Upgrade to Pro for unlimited servers."), Int64(FreeTierLimits.maxServers))
+                    message: String(
+                        format: String(localized: "You've reached the free limit of %@. Pro unlocks unlimited servers, connections, and split panes."),
+                        FreeTierLimits.serverLimitDescription(serverManager.freeServerLimit)
+                    )
                 ) {
                     showingServerLimitAlert = true
                 }
@@ -605,7 +612,7 @@ struct ServerFormSheet: View {
             Section {
                 UsageIndicator(
                     current: serverCount,
-                    limit: FreeTierLimits.maxServers,
+                    limit: serverManager.freeServerLimit,
                     label: String(localized: "Servers"),
                     showUpgrade: $showingServerLimitAlert
                 )
@@ -1420,8 +1427,9 @@ struct MoveServerSheet: View {
                     selectedWorkspaceId = workspace.id
                 }
             )
+            .adaptiveSoftScrollEdges()
         }
-        .proUpgradePresentation(isPresented: $showingUpgrade)
+        .proUpgradePresentation(isPresented: $showingUpgrade, source: .workspaceLimit)
         #if os(iOS)
         .navigationTitle("Move Server")
         .navigationBarTitleDisplayMode(.inline)
@@ -1446,6 +1454,7 @@ struct MoveServerSheet: View {
             }
         }
         #endif
+        .adaptiveSoftScrollEdges()
     }
 
     #if os(macOS)

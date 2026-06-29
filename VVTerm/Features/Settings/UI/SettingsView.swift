@@ -90,6 +90,7 @@ struct SettingsView: View {
                         ProSettingsView()
                             .navigationTitle("VVTerm Pro")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {
@@ -137,6 +138,7 @@ struct SettingsView: View {
                         GeneralSettingsView()
                             .navigationTitle("General")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("General", systemImage: "gear")
                     }
@@ -145,6 +147,7 @@ struct SettingsView: View {
                         TerminalSettingsView(fontName: $terminalFontName, fontSize: $terminalFontSize)
                             .navigationTitle("Terminal")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("Terminal", systemImage: "terminal")
                     }
@@ -153,6 +156,7 @@ struct SettingsView: View {
                         TranscriptionSettingsView()
                             .navigationTitle("Transcription")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("Transcription", systemImage: "waveform")
                     }
@@ -161,6 +165,7 @@ struct SettingsView: View {
                         KeychainSettingsView()
                             .navigationTitle("SSH Keys")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("SSH Keys", systemImage: "key")
                     }
@@ -169,6 +174,7 @@ struct SettingsView: View {
                         SyncSettingsView()
                             .navigationTitle("Sync")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("Sync", systemImage: "icloud")
                     }
@@ -177,6 +183,7 @@ struct SettingsView: View {
                         AboutSettingsView()
                             .navigationTitle("About")
                             .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
                     } label: {
                         Label("About", systemImage: "info.circle")
                     }
@@ -197,6 +204,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .adaptiveSoftScrollEdges()
         #endif
     }
 

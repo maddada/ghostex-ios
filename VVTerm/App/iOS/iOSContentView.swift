@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import StoreKit
 #if os(iOS)
 import UIKit
 import UniformTypeIdentifiers
@@ -16,6 +17,8 @@ struct iOSContentView: View {
     @StateObject private var serverManager = ServerManager.shared
     @StateObject private var sessionManager = ConnectionSessionManager.shared
     @StateObject private var viewTabConfig = ViewTabConfigurationManager.shared
+    @StateObject private var engagementTracker = EngagementTracker.shared
+    @Environment(\.requestReview) private var requestReview
 
     @State private var selectedWorkspace: Workspace?
     @State private var selectedServer: Server?
@@ -101,6 +104,7 @@ struct iOSContentView: View {
             }
         }
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
+        .adaptiveSoftScrollEdges()
         .onAppear {
             // Select first workspace on appear
             if selectedWorkspace == nil {
@@ -132,6 +136,18 @@ struct iOSContentView: View {
             }
         }
         .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
+        .proUpgradePresentation(isPresented: $engagementTracker.shouldShowProIntro, source: .postFirstConnection)
+        .onChange(of: showingTerminal) { isShowing in
+            if !isShowing {
+                engagementTracker.noteTerminalSessionEnded(
+                    otherTerminalsActive: false,
+                    isPro: StoreManager.shared.isPro
+                )
+            }
+        }
+        .onChange(of: engagementTracker.reviewRequestToken) { _ in
+            requestReview()
+        }
         .lockedItemAlert(
             .server,
             itemName: lockedServerName ?? "",
@@ -170,6 +186,7 @@ struct iOSServerListView: View {
     @State private var showingCustomEnvironmentAlert = false
     @State private var addServerPrefill: ServerFormPrefill?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
     private var canAddServer: Bool {
         !serverManager.workspaces.isEmpty
@@ -234,12 +251,14 @@ struct iOSServerListView: View {
                     onSave: { _ in showingAddServer = false }
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingLocalDiscovery) {
             LocalDeviceDiscoverySheet(manager: LocalSSHDiscoveryManager()) { discoveredHost in
                 queuedDiscoveryPrefill = ServerFormPrefill(discoveredHost: discoveredHost)
                 showingLocalDiscovery = false
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingAddWorkspace) {
             NavigationStack {
@@ -251,10 +270,12 @@ struct iOSServerListView: View {
                     }
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .modifier(AppearanceModifier())
+                .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingWorkspacePicker) {
             NavigationStack {
@@ -264,6 +285,7 @@ struct iOSServerListView: View {
                     onDismiss: { showingWorkspacePicker = false }
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverToEdit) { server in
             NavigationStack {
@@ -277,6 +299,7 @@ struct iOSServerListView: View {
                     }
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverToMove) { server in
             NavigationStack {
@@ -289,6 +312,7 @@ struct iOSServerListView: View {
                     }
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingCreateEnvironment) {
             if let workspace = selectedWorkspace {
@@ -301,6 +325,7 @@ struct iOSServerListView: View {
                         showingCreateEnvironment = false
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
         }
         .sheet(item: $editingEnvironment) { environment in
@@ -317,6 +342,7 @@ struct iOSServerListView: View {
                         editingEnvironment = nil
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
         }
         .alert(String(localized: "Delete Environment?"), isPresented: Binding(
@@ -362,6 +388,7 @@ struct iOSServerListView: View {
         .proFeatureAlert(
             title: String(localized: "Custom Environments"),
             message: String(localized: "Upgrade to Pro for custom environments"),
+            source: .customEnvironment,
             isPresented: $showingCustomEnvironmentAlert
         )
         .onChange(of: showingLocalDiscovery) { isPresented in
@@ -507,6 +534,7 @@ struct iOSServerListView: View {
                 ForEach(activeConnections) { connection in
                     iOSActiveConnectionRow(
                         session: connection.session,
+                        title: sessionManager.displayTitle(for: connection.session),
                         tabCount: connection.tabCount,
                         onOpen: { openActiveConnection(connection) },
                         onDisconnect: { disconnectActiveConnection(connection) }
@@ -531,7 +559,9 @@ struct iOSServerListView: View {
             return ActiveConnection(id: serverId, session: session, tabCount: sessions.count)
         }
         .sorted { lhs, rhs in
-            lhs.session.title.localizedCaseInsensitiveCompare(rhs.session.title) == .orderedAscending
+            let lhsTitle = sessionManager.displayTitle(for: lhs.session)
+            let rhsTitle = sessionManager.displayTitle(for: rhs.session)
+            return lhsTitle.localizedCaseInsensitiveCompare(rhsTitle) == .orderedAscending
         }
     }
 
@@ -938,6 +968,15 @@ struct iOSTerminalView: View {
         isZenModeEnabled && canUseZenMode
     }
 
+    /*
+    CDXC:iOSUpstreamSync 2026-06-29-20:02:
+    Upstream hides the native view switcher when only one content tab is visible, but Ghostex keeps its Sessions entry point as the segmented control trailing action.
+    Keep the control visible when a server context exists so upstream chrome simplification does not remove Ghostex session access.
+    */
+    private var shouldShowViewSwitcher: Bool {
+        viewTabConfig.currentVisibleTabs.count > 1 || (currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id) != nil
+    }
+
     private var zenSelectedViewBinding: Binding<String> {
         guard let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id else {
             return .constant(viewTabConfig.effectiveDefaultTab())
@@ -1142,6 +1181,7 @@ struct iOSTerminalView: View {
                 if !newValue {
                     showingZenPanel = false
                 }
+                refreshTerminalAfterChromeChange()
             }
             .onChange(of: sessionManager.sessions) { _ in
                 if currentServerId == nil, let selected = sessionManager.selectedSession {
@@ -1205,6 +1245,7 @@ struct iOSTerminalView: View {
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
                     .modifier(AppearanceModifier())
+                    .adaptiveSoftScrollEdges()
             }
             .sheet(isPresented: $showingGhostexSidebar) {
                 /*
@@ -1230,6 +1271,7 @@ struct iOSTerminalView: View {
                         onSave: { _ in serverToEdit = nil }
                     )
                 }
+                .adaptiveSoftScrollEdges()
             }
             .sheet(item: tmuxAttachPromptBinding) { prompt in
                 TmuxAttachPromptSheet(
@@ -1238,6 +1280,7 @@ struct iOSTerminalView: View {
                         sessionManager.resolveTmuxAttachPrompt(sessionId: prompt.id, selection: selection)
                     }
                 )
+                .adaptiveSoftScrollEdges()
             }
     }
 
@@ -1272,6 +1315,7 @@ struct iOSTerminalView: View {
                 iOSTerminalTabsBar(
                     sessions: serverSessions,
                     selectedSessionId: selectedSessionIdBinding,
+                    titleForSession: { sessionManager.displayTitle(for: $0) },
                     onClose: { pendingCloseSession = $0 }
                 )
             }
@@ -1317,7 +1361,7 @@ struct iOSTerminalView: View {
                 }
                 .id(selectedFileTab.id)
             } else {
-                RemoteFileTabsEmptyState {
+                RemoteFileTabsEmptyState(server: server) {
                     openNewFileTab()
                 }
             }
@@ -1359,7 +1403,7 @@ struct iOSTerminalView: View {
                         .id(selectedFileTab.id)
                         .zIndex(1)
                     } else {
-                        RemoteFileTabsEmptyState {
+                        RemoteFileTabsEmptyState(server: server) {
                             openNewFileTab()
                         }
                         .zIndex(1)
@@ -1395,19 +1439,21 @@ struct iOSTerminalView: View {
             navigationBackButton
         }
 
-        ToolbarItem(placement: .principal) {
-            if let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id {
-                iOSNativeSegmentedPicker(
-                    selection: selectedViewBinding(for: serverId),
-                    tabs: viewTabConfig.currentVisibleTabs,
-                    trailingActionSystemImage: "robot",
-                    trailingActionFallbackSystemImage: "cpu",
-                    trailingActionAccessibilityLabel: "Ghostex Sessions",
-                    onTrailingAction: {
-                        showingGhostexSidebar = true
-                    }
-                )
-                .fixedSize()
+        if shouldShowViewSwitcher {
+            ToolbarItem(placement: .principal) {
+                if let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id {
+                    iOSNativeSegmentedPicker(
+                        selection: selectedViewBinding(for: serverId),
+                        tabs: viewTabConfig.currentVisibleTabs,
+                        trailingActionSystemImage: "robot",
+                        trailingActionFallbackSystemImage: "cpu",
+                        trailingActionAccessibilityLabel: "Ghostex Sessions",
+                        onTrailingAction: {
+                            showingGhostexSidebar = true
+                        }
+                    )
+                    .fixedSize()
+                }
             }
         }
 
@@ -1874,6 +1920,18 @@ struct iOSTerminalView: View {
         focusTerminal(for: session)
     }
 
+    private func refreshTerminalAfterChromeChange() {
+        guard selectedView == "terminal",
+              let session = selectedSession ?? serverSessions.first else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            refreshTerminal(for: session)
+            focusTerminal(for: session)
+        }
+    }
+
     private func openNewTab() {
         guard let server = selectedServer else { return }
         guard sessionManager.canOpenNewTab else {
@@ -1966,6 +2024,7 @@ struct iOSTerminalView: View {
                 viewTabs: viewTabConfig.currentVisibleTabs,
                 sessions: serverSessions,
                 selectedSessionId: selectedSessionIdBinding,
+                sessionTitle: { sessionManager.displayTitle(for: $0) },
                 onCloseSession: { session in
                     pendingCloseSession = session
                 },
@@ -2314,6 +2373,7 @@ private struct NavBarBackdrop: View {
 struct iOSTerminalTabsBar: View {
     let sessions: [ConnectionSession]
     @Binding var selectedSessionId: UUID?
+    let titleForSession: (ConnectionSession) -> String
     let onClose: (ConnectionSession) -> Void
     private let minTabWidth: CGFloat = 120
 
@@ -2331,6 +2391,7 @@ struct iOSTerminalTabsBar: View {
                         ForEach(sessions) { session in
                             iOSTerminalTabButton(
                                 session: session,
+                                title: titleForSession(session),
                                 isSelected: selectedSessionId == session.id,
                                 fixedWidth: itemWidth,
                                 onSelect: { selectedSessionId = session.id },
@@ -2347,6 +2408,7 @@ struct iOSTerminalTabsBar: View {
                             ForEach(sessions) { session in
                                 iOSTerminalTabButton(
                                     session: session,
+                                    title: titleForSession(session),
                                     isSelected: selectedSessionId == session.id,
                                     fixedWidth: nil,
                                     onSelect: { selectedSessionId = session.id },
@@ -2382,6 +2444,7 @@ struct iOSTerminalTabsBar: View {
 
 private struct iOSTerminalTabButton: View {
     let session: ConnectionSession
+    let title: String
     let isSelected: Bool
     let fixedWidth: CGFloat?
     let onSelect: () -> Void
@@ -2392,7 +2455,7 @@ private struct iOSTerminalTabButton: View {
             Circle()
                 .fill(statusColor)
                 .frame(width: 6, height: 6)
-            Text(session.title)
+            Text(title)
                 .font(.callout)
                 .lineLimit(1)
         }

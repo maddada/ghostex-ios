@@ -12,6 +12,8 @@ import AppKit
 struct ProUpgradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
+    @ObservedObject private var serverManager = ServerManager.shared
+    private let source: PaywallSource
     private let onDismiss: (() -> Void)?
 
     @State private var selectedPlan: ProPlanKind = .yearly
@@ -27,7 +29,8 @@ struct ProUpgradeSheet: View {
         let isRestore: Bool
     }
 
-    init(onDismiss: (() -> Void)? = nil) {
+    init(source: PaywallSource = .general, onDismiss: (() -> Void)? = nil) {
+        self.source = source
         self.onDismiss = onDismiss
     }
 
@@ -40,11 +43,15 @@ struct ProUpgradeSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         VStack(spacing: 1) {
-                            Text("Upgrade to Pro")
+                            Text(source.paywallTitle)
                                 .font(.headline)
-                            Text("Connect everywhere, without limits.")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text(source.paywallSubtitle)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                     }
 
@@ -60,6 +67,7 @@ struct ProUpgradeSheet: View {
                     }
                 }
         }
+        .adaptiveSoftScrollEdges()
         #else
         macSheetContent
         #endif
@@ -79,6 +87,7 @@ struct ProUpgradeSheet: View {
         }
         .background(sheetBackground.ignoresSafeArea())
         .task {
+            storeManager.notePaywallPresented(source: source)
             await storeManager.loadProducts()
             selectedPlan = defaultPlan
         }
@@ -156,8 +165,9 @@ struct ProUpgradeSheet: View {
             maxHeight: .infinity
         )
         .background(sheetBackground)
-        .background(ProUpgradeWindowConfigurator())
+        .background(ProUpgradeWindowConfigurator(source: source))
         .task {
+            storeManager.notePaywallPresented(source: source)
             await storeManager.loadProducts()
             selectedPlan = defaultPlan
         }
@@ -211,6 +221,7 @@ struct ProUpgradeSheet: View {
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: 18) {
             comparisonSection
+            crossPlatformBenefitSection
             planSection
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,6 +233,31 @@ struct ProUpgradeSheet: View {
 
             NativeSectionCard(padding: 0) {
                 ComparisonTable(rows: comparisonRows)
+            }
+        }
+    }
+
+    private var crossPlatformBenefitSection: some View {
+        NativeSectionCard {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "macbook.and.iphone")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 30, height: 30)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(crossPlatformBenefitTitle)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    Text(crossPlatformBenefitMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
             }
         }
     }
@@ -261,6 +297,7 @@ struct ProUpgradeSheet: View {
         VStack(spacing: 5) {
             Button {
                 if let product = selectedProduct {
+                    storeManager.notePaywallCTATapped(product: product)
                     Task { await storeManager.purchase(product) }
                 }
             } label: {
@@ -412,6 +449,18 @@ struct ProUpgradeSheet: View {
         }
     }
 
+    private var crossPlatformBenefitTitle: String {
+        #if os(macOS)
+        return String(localized: "Also on iPhone and iPad")
+        #else
+        return String(localized: "Also on Mac")
+        #endif
+    }
+
+    private var crossPlatformBenefitMessage: String {
+        String(localized: "One Pro purchase works on iPhone, iPad, and Mac with the same Apple ID.")
+    }
+
     private var subscribeButtonTitle: String {
         guard let product = selectedProduct else { return String(localized: "Select a Plan") }
         if product.id == VVTermProducts.proLifetime {
@@ -427,7 +476,7 @@ struct ProUpgradeSheet: View {
             ComparisonFeature(
                 icon: "server.rack",
                 title: String(localized: "Servers"),
-                free: .number(String(FreeTierLimits.maxServers)),
+                free: .number(String(serverManager.freeServerLimit)),
                 pro: .unlimited(accessibilityLabel: String(localized: "Unlimited servers"))
             ),
             ComparisonFeature(
@@ -453,6 +502,12 @@ struct ProUpgradeSheet: View {
                 title: String(localized: "Split panes"),
                 free: .notIncluded(accessibilityLabel: String(localized: "Split panes not included on Free")),
                 pro: .included(accessibilityLabel: String(localized: "Split panes included on Pro"))
+            ),
+            ComparisonFeature(
+                icon: "command",
+                title: String(localized: "Custom actions"),
+                free: .number(String(FreeTierLimits.maxCustomActions)),
+                pro: .unlimited(accessibilityLabel: String(localized: "Unlimited custom actions"))
             ),
             ComparisonFeature(
                 icon: "terminal",
@@ -504,6 +559,7 @@ struct ProUpgradeSheet: View {
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     close()
+                    EngagementTracker.shared.requestReviewAfterPurchase()
                 }
             }
         case .failed(let message):
@@ -561,7 +617,7 @@ struct ProUpgradeSheet: View {
         }
     }
 
-    private func legalLink(title: String, url: String) -> some View {
+    private func legalLink(title: LocalizedStringKey, url: String) -> some View {
         Link(destination: URL(string: url)!) {
             Text(title)
                 .underline()
@@ -590,15 +646,30 @@ struct ProUpgradeSheet: View {
 
 #if os(macOS)
 private struct ProUpgradeWindowConfigurator: NSViewRepresentable {
+    let source: PaywallSource
+
     func makeNSView(context: Context) -> WindowConfigurationView {
-        WindowConfigurationView()
+        WindowConfigurationView(source: source)
     }
 
     func updateNSView(_ nsView: WindowConfigurationView, context: Context) {
+        nsView.source = source
         nsView.applyWindowConfiguration()
     }
 
     final class WindowConfigurationView: NSView {
+        var source: PaywallSource
+
+        init(source: PaywallSource) {
+            self.source = source
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            nil
+        }
+
         override var intrinsicContentSize: NSSize { .zero }
 
         override func viewDidMoveToWindow() {
@@ -608,8 +679,8 @@ private struct ProUpgradeWindowConfigurator: NSViewRepresentable {
 
         func applyWindowConfiguration() {
             DispatchQueue.main.async { [weak self] in
-                guard let window = self?.window else { return }
-                ProUpgradeWindowChrome.configure(window, setInitialSize: false)
+                guard let self, let window = self.window else { return }
+                ProUpgradeWindowChrome.configure(window, setInitialSize: false, source: self.source)
             }
         }
     }
@@ -617,13 +688,14 @@ private struct ProUpgradeWindowConfigurator: NSViewRepresentable {
 #endif
 
 extension View {
-    func proUpgradePresentation(isPresented: Binding<Bool>) -> some View {
-        modifier(ProUpgradePresentationModifier(isPresented: isPresented))
+    func proUpgradePresentation(isPresented: Binding<Bool>, source: PaywallSource = .general) -> some View {
+        modifier(ProUpgradePresentationModifier(isPresented: isPresented, source: source))
     }
 }
 
 private struct ProUpgradePresentationModifier: ViewModifier {
     @Binding var isPresented: Bool
+    let source: PaywallSource
 
     func body(content: Content) -> some View {
         #if os(macOS)
@@ -643,14 +715,15 @@ private struct ProUpgradePresentationModifier: ViewModifier {
         #else
         content
             .sheet(isPresented: $isPresented) {
-                ProUpgradeSheet()
+                ProUpgradeSheet(source: source)
+                    .adaptiveSoftScrollEdges()
             }
         #endif
     }
 
     #if os(macOS)
     private func presentWindow() {
-        ProUpgradeWindowPresenter.shared.show(storeManager: StoreManager.shared) {
+        ProUpgradeWindowPresenter.shared.show(storeManager: StoreManager.shared, source: source) {
             isPresented = false
         }
     }
@@ -667,21 +740,24 @@ private final class ProUpgradeWindowPresenter: NSObject, NSWindowDelegate {
 
     private override init() {}
 
-    func show(storeManager: StoreManager, onClose: @escaping () -> Void) {
+    func show(storeManager: StoreManager, source: PaywallSource = .general, onClose: @escaping () -> Void) {
         if let window, window.isVisible {
             self.onClose = onClose
+            ProUpgradeWindowChrome.configure(window, setInitialSize: false, source: source)
+            // The sheet's .task does not rerun on window reuse, so record the new source here.
+            storeManager.notePaywallPresented(source: source)
             window.makeKeyAndOrderFront(nil)
             return
         }
 
-        let rootView = ProUpgradeSheet { [weak self] in
+        let rootView = ProUpgradeSheet(source: source) { [weak self] in
             self?.close()
         }
         .environmentObject(storeManager)
 
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
-        configure(window)
+        configure(window, source: source)
 
         self.window = window
         self.onClose = onClose
@@ -701,8 +777,8 @@ private final class ProUpgradeWindowPresenter: NSObject, NSWindowDelegate {
         closeHandler?()
     }
 
-    private func configure(_ window: NSWindow) {
-        ProUpgradeWindowChrome.configure(window, setInitialSize: true)
+    private func configure(_ window: NSWindow, source: PaywallSource) {
+        ProUpgradeWindowChrome.configure(window, setInitialSize: true, source: source)
     }
 }
 
@@ -710,9 +786,9 @@ private enum ProUpgradeWindowChrome {
     private static let toolbarIdentifier = NSToolbar.Identifier("ProUpgradeWindowToolbar")
     private static let titlebarAccessoryIdentifier = NSUserInterfaceItemIdentifier("ProUpgradeTitlebarAccessory")
 
-    static func configure(_ window: NSWindow, setInitialSize: Bool) {
-        window.title = String(localized: "Upgrade to Pro")
-        window.subtitle = String(localized: "Connect everywhere, without limits.")
+    static func configure(_ window: NSWindow, setInitialSize: Bool, source: PaywallSource = .general) {
+        window.title = source.paywallTitle
+        window.subtitle = source.paywallSubtitle
         window.styleMask.insert([.titled, .closable, .resizable])
         window.styleMask.remove(.fullSizeContentView)
         window.titleVisibility = .hidden
@@ -738,20 +814,20 @@ private enum ProUpgradeWindowChrome {
         }
         window.toolbarStyle = .unified
 
-        installTitlebarAccessory(in: window)
+        installTitlebarAccessory(in: window, source: source)
     }
 
-    private static func installTitlebarAccessory(in window: NSWindow) {
+    private static func installTitlebarAccessory(in window: NSWindow, source: PaywallSource) {
         if let existing = window.titlebarAccessoryViewControllers.first(where: {
             $0.view.identifier == titlebarAccessoryIdentifier
         }) {
-            (existing.view as? ProUpgradeTitlebarView)?.updateText()
+            (existing.view as? ProUpgradeTitlebarView)?.updateText(source: source)
             return
         }
 
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .left
-        accessory.view = ProUpgradeTitlebarView(identifier: titlebarAccessoryIdentifier)
+        accessory.view = ProUpgradeTitlebarView(identifier: titlebarAccessoryIdentifier, source: source)
         window.addTitlebarAccessoryViewController(accessory)
     }
 }
@@ -760,11 +836,11 @@ private final class ProUpgradeTitlebarView: NSView {
     private let titleField = NSTextField(labelWithString: "")
     private let subtitleField = NSTextField(labelWithString: "")
 
-    init(identifier: NSUserInterfaceItemIdentifier) {
+    init(identifier: NSUserInterfaceItemIdentifier, source: PaywallSource) {
         super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 42))
         self.identifier = identifier
         setup()
-        updateText()
+        updateText(source: source)
     }
 
     @available(*, unavailable)
@@ -772,9 +848,9 @@ private final class ProUpgradeTitlebarView: NSView {
         nil
     }
 
-    func updateText() {
-        titleField.stringValue = String(localized: "Upgrade to Pro")
-        subtitleField.stringValue = String(localized: "Connect everywhere, without limits.")
+    func updateText(source: PaywallSource) {
+        titleField.stringValue = source.paywallTitle
+        subtitleField.stringValue = source.paywallSubtitle
     }
 
     private func setup() {
@@ -808,6 +884,58 @@ private final class ProUpgradeTitlebarView: NSView {
     }
 }
 #endif
+
+// MARK: - Source Copy
+
+extension PaywallSource {
+    var paywallTitle: String {
+        switch self {
+        case .general, .settings, .sidebarBanner:
+            return String(localized: "Upgrade to Pro")
+        case .serverLimit:
+            return String(localized: "Unlock unlimited servers")
+        case .workspaceLimit:
+            return String(localized: "Unlock unlimited workspaces")
+        case .tabLimit:
+            return String(localized: "Unlock simultaneous connections")
+        case .fileTabLimit:
+            return String(localized: "Unlock multiple file tabs")
+        case .splitPane:
+            return String(localized: "Unlock split panes")
+        case .customEnvironment:
+            return String(localized: "Unlock custom environments")
+        case .snippetLimit:
+            return String(localized: "Unlock unlimited custom actions")
+        case .postFirstConnection:
+            return String(localized: "You're connected")
+        case .welcome:
+            return String(localized: "VVTerm Pro")
+        }
+    }
+
+    var paywallSubtitle: String {
+        switch self {
+        case .general, .settings, .sidebarBanner, .welcome:
+            return String(localized: "Connect everywhere, without limits.")
+        case .serverLimit:
+            return String(localized: "Pro removes every limit on servers, tabs, and workspaces.")
+        case .workspaceLimit:
+            return String(localized: "Pro removes every limit on workspaces, servers, and tabs.")
+        case .tabLimit:
+            return String(localized: "Run all your servers side by side.")
+        case .fileTabLimit:
+            return String(localized: "Browse files on all your servers at once.")
+        case .splitPane:
+            return String(localized: "Split your terminal into multiple panes.")
+        case .customEnvironment:
+            return String(localized: "Organize servers with your own environments.")
+        case .snippetLimit:
+            return String(localized: "Keep every command one tap away.")
+        case .postFirstConnection:
+            return String(localized: "Free covers one machine. Pro works across all of them.")
+        }
+    }
+}
 
 // MARK: - Plans
 

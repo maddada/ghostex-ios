@@ -114,7 +114,9 @@ struct TerminalPresetFormView: View {
         .frame(width: 450, height: 360)
         .sheet(isPresented: $showingIconPicker) {
             SFSymbolPickerView(selectedSymbol: $selectedIcon, isPresented: $showingIconPicker)
+                .adaptiveSoftScrollEdges()
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private var isValid: Bool {

@@ -191,6 +191,7 @@ struct TerminalCustomActionFormView: View {
                 Text("This cannot be undone.")
             }
         }
+        .adaptiveSoftScrollEdges()
     }
 
     private func saveAction() {

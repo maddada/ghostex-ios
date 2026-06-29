@@ -23,12 +23,15 @@ struct TranscriptionSettingsKeys {
     static let provider = "transcriptionProvider"
     static let mlxWhisperModelId = "mlxWhisperModelId"
     static let mlxParakeetModelId = "mlxParakeetModelId"
+    static let language = "transcriptionLanguage"
 }
 
 struct TranscriptionSettingsDefaults {
     static let provider: TranscriptionProvider = .system
     static let mlxWhisperModelId = "mlx-community/whisper-tiny-mlx"
     static let mlxParakeetModelId = "mlx-community/parakeet-tdt-0.6b-v2"
+    static let language = "en"
+    static let autoLanguageCode = "auto"
 }
 
 struct TranscriptionSettingsStore {
@@ -59,6 +62,14 @@ struct TranscriptionSettingsStore {
             raw = TranscriptionSettingsDefaults.mlxWhisperModelId
         }
         return normalizedWhisperModelId(raw)
+    }
+
+    static func currentLanguageCode() -> String {
+        let raw = UserDefaults.standard.string(forKey: TranscriptionSettingsKeys.language)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard let raw, !raw.isEmpty else { return TranscriptionSettingsDefaults.language }
+        return raw
     }
 
     static func currentParakeetModelId() -> String {

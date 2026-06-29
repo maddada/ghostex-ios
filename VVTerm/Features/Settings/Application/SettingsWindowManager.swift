@@ -23,6 +23,7 @@ private struct LocalizedSettingsView: View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
         SettingsView()
             .modifier(AppearanceModifier())
+            .adaptiveSoftScrollEdges()
             .environment(\.locale, locale)
             .environmentObject(appLockManager)
             .environmentObject(terminalThemeManager)

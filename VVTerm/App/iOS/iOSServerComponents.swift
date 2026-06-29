@@ -150,6 +150,7 @@ struct iOSServerRow: View {
 
 struct iOSActiveConnectionRow: View {
     let session: ConnectionSession
+    let title: String
     let tabCount: Int
     let onOpen: () -> Void
     let onDisconnect: () -> Void
@@ -166,7 +167,7 @@ struct iOSActiveConnectionRow: View {
 
                 // Connection info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.title)
+                    Text(title)
                         .font(.body)
                         .foregroundStyle(.primary)
 
@@ -373,6 +374,7 @@ struct iOSWorkspacePickerView: View {
                     selectedWorkspace = newWorkspace
                 }
             )
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $workspaceToEdit) { workspace in
             WorkspaceFormSheet(
@@ -384,6 +386,7 @@ struct iOSWorkspacePickerView: View {
                     }
                 }
             )
+            .adaptiveSoftScrollEdges()
         }
         .sheet(item: $workspaceToManageServers) { workspace in
             NavigationStack {
@@ -392,6 +395,7 @@ struct iOSWorkspacePickerView: View {
                     workspace: workspace
                 )
             }
+            .adaptiveSoftScrollEdges()
         }
         .lockedItemAlert(
             .workspace,
@@ -427,16 +431,19 @@ struct iOSWorkspacePickerView: View {
 
     private func deleteWarningText(for workspace: Workspace?) -> String {
         guard let workspace else {
-            return "This will delete the workspace and all servers in it. This cannot be undone."
+            return String(localized: "This will delete the workspace and all servers in it. This cannot be undone.")
         }
         let count = serverManager.servers(in: workspace, environment: nil).count
         if count == 0 {
-            return "This will delete the workspace. This cannot be undone."
+            return String(localized: "This will delete the workspace. This cannot be undone.")
         }
         if count == 1 {
-            return "This will delete the workspace and its 1 server. This cannot be undone."
+            return String(localized: "This will delete the workspace and its 1 server. This cannot be undone.")
         }
-        return "This will delete the workspace and all \(count) servers in it. This cannot be undone."
+        return String(
+            format: String(localized: "This will delete the workspace and all %lld servers in it. This cannot be undone."),
+            Int64(count)
+        )
     }
 }
 #endif

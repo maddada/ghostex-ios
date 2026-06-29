@@ -202,6 +202,10 @@ struct NoServersEmptyState: View {
                 .buttonStyle(.plain)
             }
 
+            /*
+            CDXC:iOSLocalDiscovery 2026-06-29-20:02:
+            Ghostex keeps local network discovery available from the empty server state so first-run users can create a prefilled server instead of typing host details manually.
+            */
             if let onDiscoverLocalDevices, !requiresWorkspace {
                 Button(action: onDiscoverLocalDevices) {
                     HStack(spacing: 8) {

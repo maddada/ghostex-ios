@@ -24,6 +24,12 @@ final class AudioCaptureService: ObservableObject {
         audioLevel = 0
         recordingDuration = 0
 
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+        try session.setActive(true, options: [])
+        #endif
+
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -54,6 +60,11 @@ final class AudioCaptureService: ObservableObject {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
         }
+
+        #if os(iOS)
+        // Release the session so system services (e.g. keyboard dictation) regain the mic.
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        #endif
 
         audioEngine = nil
         converter = nil

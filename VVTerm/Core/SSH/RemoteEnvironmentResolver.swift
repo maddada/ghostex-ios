@@ -99,15 +99,24 @@ struct RemoteEnvironment: Hashable, Sendable {
     let activeShellName: String?
     let powerShellExecutable: String?
 
-    var supportsTmuxRuntime: Bool {
+    nonisolated var supportsTmuxRuntime: Bool {
+        if platform != .windows {
+            return shellProfile.family == .posix
+        }
+
+        switch shellProfile.family {
+        case .powershell, .cmd:
+            return true
+        case .posix, .unknown:
+            return false
+        }
+    }
+
+    nonisolated var supportsMoshRuntime: Bool {
         platform != .windows && shellProfile.family == .posix
     }
 
-    var supportsMoshRuntime: Bool {
-        platform != .windows && shellProfile.family == .posix
-    }
-
-    var supportsWorkingDirectoryRestore: Bool {
+    nonisolated var supportsWorkingDirectoryRestore: Bool {
         switch shellProfile.family {
         case .posix, .powershell, .cmd:
             return true
@@ -132,12 +141,15 @@ enum RemoteEnvironmentResolver {
 
         switch platform {
         case .windows:
-            let powerShellExecutable = await detectPowerShellExecutable(using: client)
             let activeShell = await detectWindowsShell(using: client)
+            let powerShellExecutable = await detectPowerShellExecutable(
+                using: client,
+                preferredExecutableName: activeShell.powerShellExecutableName
+            )
             let profile: RemoteShellProfile
             switch activeShell {
-            case .powershell:
-                profile = .powershell(executableName: powerShellExecutable)
+            case .powershell(_):
+                profile = .powershell(executableName: activeShell.powerShellExecutableName ?? powerShellExecutable)
             case .cmd:
                 profile = .cmd
             case .unknown:
@@ -218,9 +230,48 @@ enum RemoteEnvironmentResolver {
         }
     }
 
-    private static func detectPowerShellExecutable(using client: SSHClient) async -> String? {
+    nonisolated static func powerShellExecutableCandidates(preferredExecutableName: String?) -> [String] {
+        var candidates: [String] = []
+        if let preferred = normalizedPowerShellExecutableName(preferredExecutableName) {
+            candidates.append(preferred)
+        }
+        for fallback in ["powershell", "pwsh"] where !candidates.contains(fallback) {
+            candidates.append(fallback)
+        }
+        return candidates
+    }
+
+    nonisolated static func powerShellExecutableName(inWindowsShellOutput output: String) -> String? {
+        let normalized = output
+            .lowercased()
+            .replacingOccurrences(of: "\\", with: "/")
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'"))
+        let tokens = normalized
+            .components(separatedBy: separators)
+            .compactMap { token -> String? in
+                let executable = token
+                    .split(separator: "/")
+                    .last
+                    .map(String.init)?
+                    .replacingOccurrences(of: ".exe", with: "")
+                return normalizedPowerShellExecutableName(executable)
+            }
+
+        if tokens.contains("pwsh") {
+            return "pwsh"
+        }
+        if tokens.contains("powershell") {
+            return "powershell"
+        }
+        return nil
+    }
+
+    private static func detectPowerShellExecutable(
+        using client: SSHClient,
+        preferredExecutableName: String?
+    ) async -> String? {
         let marker = "__VVTERM_PWSH_OK__"
-        for executable in ["powershell", "pwsh"] {
+        for executable in powerShellExecutableCandidates(preferredExecutableName: preferredExecutableName) {
             if let output = await probe("cmd.exe /d /c where \(executable)", using: client),
                output.lowercased().contains(executable) {
                 return executable
@@ -240,11 +291,13 @@ enum RemoteEnvironmentResolver {
         return nil
     }
 
-    private static func detectWindowsShell(using client: SSHClient) async -> RemoteShellFamily {
+    private static func detectWindowsShell(using client: SSHClient) async -> RemoteWindowsShellDetection {
         if let output = await probe(#"reg query "HKLM\SOFTWARE\OpenSSH" /v DefaultShell"#, using: client) {
             let normalized = output.lowercased()
             if normalized.contains("powershell") || normalized.contains("pwsh") {
-                return .powershell
+                return .powershell(
+                    executableName: powerShellExecutableName(inWindowsShellOutput: output)
+                )
             }
             if normalized.contains("cmd.exe") {
                 return .cmd
@@ -254,7 +307,7 @@ enum RemoteEnvironmentResolver {
         let powerShellMarker = "__VVTERM_ACTIVE_POWERSHELL__"
         if let output = await probe("Write-Output '\(powerShellMarker)'", using: client),
            output.contains(powerShellMarker) {
-            return .powershell
+            return .powershell(executableName: nil)
         }
 
         let cmdMarker = "__VVTERM_ACTIVE_CMD__"
@@ -266,7 +319,33 @@ enum RemoteEnvironmentResolver {
         return .unknown
     }
 
+    private static func normalizedPowerShellExecutableName(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value
+            .lowercased()
+            .replacingOccurrences(of: ".exe", with: "")
+        if normalized == "pwsh" {
+            return "pwsh"
+        }
+        if normalized == "powershell" {
+            return "powershell"
+        }
+        return nil
+    }
+
     private static func probe(_ command: String, using client: SSHClient) async -> String? {
         try? await client.execute(command, timeout: probeTimeout)
+    }
+}
+
+private enum RemoteWindowsShellDetection: Equatable {
+    case powershell(executableName: String?)
+    case cmd
+    case posix
+    case unknown
+
+    var powerShellExecutableName: String? {
+        guard case .powershell(let executableName) = self else { return nil }
+        return executableName
     }
 }

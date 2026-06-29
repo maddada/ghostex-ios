@@ -56,6 +56,7 @@ struct LocalDeviceDiscoverySheet: View {
         .onDisappear {
             manager.stopScan()
         }
+        .adaptiveSoftScrollEdges()
         #else
         VStack(spacing: 0) {
             DialogSheetHeader(

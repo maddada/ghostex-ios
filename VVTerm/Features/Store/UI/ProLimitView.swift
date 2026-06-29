@@ -71,6 +71,7 @@ struct ProFeatureLock: View {
 struct LimitReachedAlert: ViewModifier {
     let limitType: LimitType
     @Binding var isPresented: Bool
+    @ObservedObject private var serverManager = ServerManager.shared
     @State private var showUpgrade = false
 
     enum LimitType {
@@ -88,16 +89,28 @@ struct LimitReachedAlert: ViewModifier {
             }
         }
 
-        var message: String {
+        func message(serverLimit: Int) -> String {
             switch self {
             case .servers:
-                return String(format: String(localized: "You've reached the limit of %lld servers on the free plan. Upgrade to Pro for unlimited servers."), Int64(FreeTierLimits.maxServers))
+                return String(
+                    format: String(localized: "You've reached the free limit of %@. Pro unlocks unlimited servers, workspaces, simultaneous connections, and split panes."),
+                    FreeTierLimits.serverLimitDescription(serverLimit)
+                )
             case .workspaces:
-                return String(format: String(localized: "You've reached the limit of %lld workspace on the free plan. Upgrade to Pro for unlimited workspaces."), Int64(FreeTierLimits.maxWorkspaces))
+                return String(format: String(localized: "You've reached the free limit of %lld workspace. Pro unlocks unlimited workspaces, servers, simultaneous connections, and split panes."), Int64(FreeTierLimits.maxWorkspaces))
             case .tabs:
-                return String(format: String(localized: "You can only have %lld connection at a time on the free plan. Upgrade to Pro for multiple simultaneous connections."), Int64(FreeTierLimits.maxTabs))
+                return String(format: String(localized: "The free plan runs %lld connection at a time. Pro unlocks simultaneous connections, unlimited servers, and split panes."), Int64(FreeTierLimits.maxTabs))
             case .fileTabs:
-                return String(localized: "You can only have 1 file tab at a time on the free plan. Upgrade to Pro for multiple file tabs.")
+                return String(localized: "The free plan opens 1 file tab at a time. Pro unlocks multiple file tabs, simultaneous connections, and unlimited servers.")
+            }
+        }
+
+        var paywallSource: PaywallSource {
+            switch self {
+            case .servers: return .serverLimit
+            case .workspaces: return .workspaceLimit
+            case .tabs: return .tabLimit
+            case .fileTabs: return .fileTabLimit
             }
         }
     }
@@ -111,9 +124,38 @@ struct LimitReachedAlert: ViewModifier {
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(limitType.message)
+                Text(limitType.message(serverLimit: serverManager.freeServerLimit))
             }
-            .proUpgradePresentation(isPresented: $showUpgrade)
+            .onChangeCompat(of: isPresented) { presented in
+                if presented {
+                    trackLimitHit()
+                }
+            }
+            .proUpgradePresentation(isPresented: $showUpgrade, source: limitType.paywallSource)
+    }
+
+    private func trackLimitHit() {
+        let current: Int
+        let limit: Int
+
+        switch limitType {
+        case .servers:
+            current = serverManager.servers.count
+            limit = serverManager.freeServerLimit
+        case .workspaces:
+            current = serverManager.workspaces.count
+            limit = FreeTierLimits.maxWorkspaces
+        case .tabs, .fileTabs:
+            current = FreeTierLimits.maxTabs
+            limit = FreeTierLimits.maxTabs
+        }
+
+        AnalyticsTracker.shared.trackLimitHit(
+            source: limitType.paywallSource.rawValue,
+            generation: serverManager.freePlanGeneration.rawValue,
+            current: current,
+            limit: limit
+        )
     }
 }
 
@@ -128,6 +170,7 @@ extension View {
 struct ProFeatureAlert: ViewModifier {
     let title: String
     let message: String
+    let source: PaywallSource
     @Binding var isPresented: Bool
     @State private var showUpgrade = false
 
@@ -142,19 +185,20 @@ struct ProFeatureAlert: ViewModifier {
             } message: {
                 Text(message)
             }
-            .proUpgradePresentation(isPresented: $showUpgrade)
+            .proUpgradePresentation(isPresented: $showUpgrade, source: source)
     }
 }
 
 extension View {
-    func proFeatureAlert(title: String, message: String, isPresented: Binding<Bool>) -> some View {
-        modifier(ProFeatureAlert(title: title, message: message, isPresented: isPresented))
+    func proFeatureAlert(title: String, message: String, source: PaywallSource = .general, isPresented: Binding<Bool>) -> some View {
+        modifier(ProFeatureAlert(title: title, message: message, source: source, isPresented: isPresented))
     }
 
     func splitPaneProFeatureAlert(isPresented: Binding<Bool>) -> some View {
         proFeatureAlert(
             title: String(localized: "Split Panes"),
             message: String(localized: "Upgrade to Pro to split terminal panes"),
+            source: .splitPane,
             isPresented: isPresented
         )
     }
@@ -248,6 +292,7 @@ struct LockedItemAlert: ViewModifier {
     let itemType: ItemType
     let itemName: String
     @Binding var isPresented: Bool
+    @ObservedObject private var serverManager = ServerManager.shared
     @State private var showUpgrade = false
 
     enum ItemType {
@@ -261,12 +306,22 @@ struct LockedItemAlert: ViewModifier {
             }
         }
 
-        var message: String {
+        func message(serverLimit: Int) -> String {
             switch self {
             case .server:
-                return String(format: String(localized: "This server exceeds your free plan limit of %lld servers. Renew your Pro subscription to access all your servers."), Int64(FreeTierLimits.maxServers))
+                return String(
+                    format: String(localized: "This server exceeds your free plan limit of %@. Renew your Pro subscription to access all your servers."),
+                    FreeTierLimits.serverLimitDescription(serverLimit)
+                )
             case .workspace:
                 return String(format: String(localized: "This workspace exceeds your free plan limit of %lld workspace. Renew your Pro subscription to access all your workspaces."), Int64(FreeTierLimits.maxWorkspaces))
+            }
+        }
+
+        var paywallSource: PaywallSource {
+            switch self {
+            case .server: return .serverLimit
+            case .workspace: return .workspaceLimit
             }
         }
     }
@@ -279,9 +334,9 @@ struct LockedItemAlert: ViewModifier {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(String(format: String(localized: "\"%@\" %@"), itemName, itemType.message))
+                Text(String(format: String(localized: "\"%@\" %@"), itemName, itemType.message(serverLimit: serverManager.freeServerLimit)))
             }
-            .proUpgradePresentation(isPresented: $showUpgrade)
+            .proUpgradePresentation(isPresented: $showUpgrade, source: itemType.paywallSource)
     }
 }
 
