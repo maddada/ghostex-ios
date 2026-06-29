@@ -14,7 +14,7 @@
 "Retry" = "Erneut versuchen";
 "Upgrade" = "Upgrade";
 "Upgrade to Pro" = "Auf Pro upgraden";
-"Upgrade to VVTerm Pro" = "Auf VVTerm Pro upgraden";
+"Upgrade to Ghostex Pro" = "Auf Ghostex Pro upgraden";
 "View Plans" = "Pläne ansehen";
 "Manage Subscription" = "Abo verwalten";
 "Manage subscription" = "Abo verwalten";
@@ -74,8 +74,8 @@
 "Copied" = "Kopiert";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "Über VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "Über Ghostex";
 "Version %@ (%@)" = "Version %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "Professioneller SSH‑Client\nfür macOS und iOS";
 "Visit Website" = "Website besuchen";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "Willkommen bei VVTerm";
+"Welcome to Ghostex" = "Willkommen bei Ghostex";
 "Your secure SSH terminal" = "Terminal, Dateien und Live‑Serverstatistiken an einem Ort.";
 "Continue" = "Weiter";
 "SSH Terminal" = "SSH‑Terminal";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "Intervall: %lld s";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "Upgrade für unbegrenzte Funktionen";
 "Unlimited Servers" = "Unbegrenzte Server";
 "Add as many servers as you need (free: 3)" = "Füge so viele Server hinzu wie nötig (kostenlos: 3)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "ARBEITSBEREICH";
 "SERVERS" = "SERVER";
-"Support VVTerm" = "VVTerm unterstützen";
+"Support Ghostex" = "Ghostex unterstützen";
 "All" = "Alle";
 "Custom..." = "Benutzerdefiniert...";
 "Unlock with Pro" = "Mit Pro freischalten";
@@ -725,10 +725,10 @@
 "%lld windows" = "%lld Fenster";
 "New session" = "Neue Sitzung";
 "Skip tmux" = "tmux überspringen";
-"Create VVTerm session" = "VVTerm-Sitzung erstellen";
+"Create Ghostex session" = "Ghostex-Sitzung erstellen";
 "Ask every time" = "Jedes Mal fragen";
 "Use remembered session" = "Gemerkte Sitzung verwenden";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "Für diese Verbindung immer eine von VVTerm verwaltete tmux-Sitzung erstellen oder anhängen.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "Für diese Verbindung immer eine von Ghostex verwaltete tmux-Sitzung erstellen oder anhängen.";
 "Show a prompt on each new tab or split so you can choose a session." = "Bei jedem neuen Tab oder Split einen Dialog anzeigen, damit du eine Sitzung auswählen kannst.";
 "Start a normal shell without tmux session persistence." = "Eine normale Shell ohne tmux-Sitzungspersistenz starten.";
 "Automatically attach to the last tmux session you selected." = "Automatisch an die zuletzt ausgewählte tmux-Sitzung anhängen.";
@@ -749,13 +749,13 @@
 "Set a device passcode before using biometric authentication." = "Legen Sie einen Gerätecode fest, bevor Sie biometrische Authentifizierung verwenden.";
 "Biometric authentication is locked. Unlock the device and try again." = "Biometrische Authentifizierung ist gesperrt. Entsperren Sie das Gerät und versuchen Sie es erneut.";
 "Authentication failed." = "Authentifizierung fehlgeschlagen.";
-"Enable %@ for VVTerm" = "%@ für VVTerm aktivieren";
-"Unlock VVTerm with %@" = "VVTerm mit %@ entsperren";
+"Enable %@ for Ghostex" = "%@ für Ghostex aktivieren";
+"Unlock Ghostex with %@" = "Ghostex mit %@ entsperren";
 "Unlock server %@" = "Server %@ entsperren";
 "Unlock with %@" = "Mit %@ entsperren";
-"VVTerm is locked" = "VVTerm ist gesperrt";
+"Ghostex is locked" = "Ghostex ist gesperrt";
 "Require %@ to open this server" = "%@ erforderlich, um diesen Server zu öffnen";
-"Require %@ to open VVTerm" = "%@ erforderlich, um VVTerm zu öffnen";
+"Require %@ to open Ghostex" = "%@ erforderlich, um Ghostex zu öffnen";
 "Lock when app goes to background" = "Sperren, wenn die App in den Hintergrund wechselt";
 "Privacy Mode" = "Privatsphärenmodus";
 "Re-auth grace period" = "Karenzzeit für erneute Authentifizierung";
@@ -1122,8 +1122,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "Der kostenlose Plan ermöglicht eine aktive %lld-Verbindung. Trennen Sie einen anderen Server oder führen Sie ein Upgrade durch.";
 "From" = "Von";
 "Group" = "Gruppe";
-"Help Improve VVTerm" = "Helfen Sie mit, VVTerm zu verbessern";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Helfen Sie dabei, VVTerm zu verbessern, teilt anonyme Statistiken darüber, welche Funktionen verwendet werden – niemals, was Sie eingeben, Ihre Server oder irgendetwas, das Sie identifiziert.";
+"Help Improve Ghostex" = "Helfen Sie mit, Ghostex zu verbessern";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Helfen Sie dabei, Ghostex zu verbessern, teilt anonyme Statistiken darüber, welche Funktionen verwendet werden – niemals, was Sie eingeben, Ihre Server oder irgendetwas, das Sie identifiziert.";
 "Hide Hidden Files" = "Versteckte Dateien ausblenden";
 "Hide Sidebar" = "Seitenleiste ausblenden";
 "Hide search" = "Suche ausblenden";
@@ -1241,7 +1241,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro hebt alle Beschränkungen für Arbeitsbereiche, Server und Registerkarten auf.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro schaltet unbegrenzte Arbeitsbereiche, Server und Verbindungen frei.";
 "Processing" = "Verarbeitung";
-"Rate VVTerm" = "Bewerten Sie VVTerm";
+"Rate Ghostex" = "Bewerten Sie Ghostex";
 "Read" = "Lesen";
 "Reconnecting (attempt %lld)…" = "Verbindung wird wiederhergestellt (Versuch %lld)…";
 "Reconnecting…" = "Wieder verbinden…";
@@ -1381,11 +1381,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "Verwenden von SSH-Fallback für diese Sitzung (Mosh wird von der aufgelösten Remote-Umgebung nicht unterstützt).";
 "Using SSH fallback for this session (mosh-server is missing)." = "Für diese Sitzung wird SSH-Fallback verwendet (Mosh-Server fehlt).";
 "Using SSH fallback for this session." = "Für diese Sitzung wird SSH-Fallback verwendet.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm verfügt über %lld vertrauenswürdige SSH-Hosts auf diesem Gerät. Durch das Zurücksetzen vertrauenswürdiger Hosts vertraut VVTerm dem Hostschlüssel, der bei der nächsten Verbindung angezeigt wird.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm verfügt über 1 vertrauenswürdigen SSH-Host auf diesem Gerät. Durch das Zurücksetzen vertrauenswürdiger Hosts vertraut VVTerm dem Hostschlüssel, der bei der nächsten Verbindung angezeigt wird.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm hat einen anderen SSH-Hostschlüssel für %@ gespeichert. Fahren Sie nur fort, wenn Sie diesen Server neu erstellt haben oder dem neuen Host vertrauen.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm vergisst alle auf diesem Gerät gespeicherten SSH-Host-Fingerabdrücke. Die nächste Verbindung zu jedem Host vertraut dem von ihm präsentierten Schlüssel.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm vergisst den gespeicherten SSH-Hostschlüssel und stellt die Verbindung wieder her.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex verfügt über %lld vertrauenswürdige SSH-Hosts auf diesem Gerät. Durch das Zurücksetzen vertrauenswürdiger Hosts vertraut Ghostex dem Hostschlüssel, der bei der nächsten Verbindung angezeigt wird.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex verfügt über 1 vertrauenswürdigen SSH-Host auf diesem Gerät. Durch das Zurücksetzen vertrauenswürdiger Hosts vertraut Ghostex dem Hostschlüssel, der bei der nächsten Verbindung angezeigt wird.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex hat einen anderen SSH-Hostschlüssel für %@ gespeichert. Fahren Sie nur fort, wenn Sie diesen Server neu erstellt haben oder dem neuen Host vertrauen.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex vergisst alle auf diesem Gerät gespeicherten SSH-Host-Fingerabdrücke. Die nächste Verbindung zu jedem Host vertraut dem von ihm präsentierten Schlüssel.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex vergisst den gespeicherten SSH-Hostschlüssel und stellt die Verbindung wieder her.";
 "Welcome to Pro" = "Willkommen bei Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "Ohne tmux kann der App-Hintergrund die Ausführung von Befehlen unterbrechen.";
 "Write" = "Schreiben";

@@ -14,7 +14,7 @@
 "Retry" = "ลองอีกครั้ง";
 "Upgrade" = "อัปเกรด";
 "Upgrade to Pro" = "อัปเกรดเป็น Pro";
-"Upgrade to VVTerm Pro" = "อัปเกรดเป็น VVTerm Pro";
+"Upgrade to Ghostex Pro" = "อัปเกรดเป็น Ghostex Pro";
 "View Plans" = "ดูแพ็กเกจ";
 "Manage Subscription" = "จัดการการสมัครสมาชิก";
 "Manage subscription" = "จัดการการสมัครสมาชิก";
@@ -74,8 +74,8 @@
 "Copied" = "คัดลอกแล้ว";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "เกี่ยวกับ VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "เกี่ยวกับ Ghostex";
 "Version %@ (%@)" = "เวอร์ชัน %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "ไคลเอนต์ SSH ระดับมืออาชีพ\nสำหรับ macOS และ iOS";
 "Visit Website" = "เยี่ยมชมเว็บไซต์";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "ยินดีต้อนรับสู่ VVTerm";
+"Welcome to Ghostex" = "ยินดีต้อนรับสู่ Ghostex";
 "Your secure SSH terminal" = "เทอร์มินัล ไฟล์ และสถิติเซิร์ฟเวอร์แบบสดในที่เดียว";
 "Continue" = "ดำเนินการต่อ";
 "SSH Terminal" = "เทอร์มินัล SSH";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "ช่วงเวลา: %lld วินาที";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "อัปเกรดเพื่อใช้งานไม่จำกัด";
 "Unlimited Servers" = "เซิร์ฟเวอร์ไม่จำกัด";
 "Add as many servers as you need (free: 3)" = "เพิ่มเซิร์ฟเวอร์ตามต้องการ (ฟรี: 3)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "เวิร์กสเปซ";
 "SERVERS" = "เซิร์ฟเวอร์";
-"Support VVTerm" = "สนับสนุน VVTerm";
+"Support Ghostex" = "สนับสนุน Ghostex";
 "All" = "ทั้งหมด";
 "Custom..." = "กำหนดเอง...";
 "Unlock with Pro" = "ปลดล็อกด้วย Pro";
@@ -725,10 +725,10 @@
 "%lld windows" = "%lld หน้าต่าง";
 "New session" = "เซสชันใหม่";
 "Skip tmux" = "ข้าม tmux";
-"Create VVTerm session" = "สร้างเซสชัน VVTerm";
+"Create Ghostex session" = "สร้างเซสชัน Ghostex";
 "Ask every time" = "ถามทุกครั้ง";
 "Use remembered session" = "ใช้เซสชันที่จดจำไว้";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "สำหรับการเชื่อมต่อนี้ ให้สร้างหรือเชื่อมต่อกับเซสชัน tmux ที่ VVTerm จัดการเสมอ";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "สำหรับการเชื่อมต่อนี้ ให้สร้างหรือเชื่อมต่อกับเซสชัน tmux ที่ Ghostex จัดการเสมอ";
 "Show a prompt on each new tab or split so you can choose a session." = "แสดงพรอมต์ทุกครั้งที่เปิดแท็บใหม่หรือแบ่งหน้าจอ เพื่อให้คุณเลือกเซสชันได้";
 "Start a normal shell without tmux session persistence." = "เริ่มเชลล์ปกติโดยไม่ใช้การคงอยู่ของเซสชัน tmux";
 "Automatically attach to the last tmux session you selected." = "เชื่อมต่ออัตโนมัติกับเซสชัน tmux ล่าสุดที่คุณเลือก";
@@ -749,13 +749,13 @@
 "Set a device passcode before using biometric authentication." = "ตั้งรหัสผ่านอุปกรณ์ก่อนใช้การยืนยันตัวตนด้วยชีวมิติ";
 "Biometric authentication is locked. Unlock the device and try again." = "การยืนยันตัวตนด้วยชีวมิติถูกล็อก ปลดล็อกอุปกรณ์แล้วลองใหม่อีกครั้ง";
 "Authentication failed." = "การยืนยันตัวตนล้มเหลว";
-"Enable %@ for VVTerm" = "เปิดใช้ %@ สำหรับ VVTerm";
-"Unlock VVTerm with %@" = "ปลดล็อก VVTerm ด้วย %@";
+"Enable %@ for Ghostex" = "เปิดใช้ %@ สำหรับ Ghostex";
+"Unlock Ghostex with %@" = "ปลดล็อก Ghostex ด้วย %@";
 "Unlock server %@" = "ปลดล็อกเซิร์ฟเวอร์ %@";
 "Unlock with %@" = "ปลดล็อกด้วย %@";
-"VVTerm is locked" = "VVTerm ถูกล็อก";
+"Ghostex is locked" = "Ghostex ถูกล็อก";
 "Require %@ to open this server" = "ต้องใช้ %@ เพื่อเปิดเซิร์ฟเวอร์นี้";
-"Require %@ to open VVTerm" = "ต้องใช้ %@ เพื่อเปิด VVTerm";
+"Require %@ to open Ghostex" = "ต้องใช้ %@ เพื่อเปิด Ghostex";
 "Lock when app goes to background" = "ล็อกเมื่อแอปไปทำงานเบื้องหลัง";
 "Privacy Mode" = "โหมดความเป็นส่วนตัว";
 "Re-auth grace period" = "ช่วงผ่อนผันการยืนยันตัวตนใหม่";
@@ -1122,8 +1122,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "แผนฟรีช่วยให้ %lld ใช้งานการเชื่อมต่อได้ ตัดการเชื่อมต่อเซิร์ฟเวอร์อื่นหรืออัปเกรด";
 "From" = "จาก";
 "Group" = "กลุ่ม";
-"Help Improve VVTerm" = "ช่วยปรับปรุง VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "ช่วยปรับปรุง VVTerm แบ่งปันสถิติที่ไม่เปิดเผยตัวตนเกี่ยวกับฟีเจอร์ที่ใช้ — ไม่รวมถึงสิ่งที่คุณพิมพ์ เซิร์ฟเวอร์ของคุณ หรือสิ่งอื่นใดที่ระบุถึงตัวคุณ";
+"Help Improve Ghostex" = "ช่วยปรับปรุง Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "ช่วยปรับปรุง Ghostex แบ่งปันสถิติที่ไม่เปิดเผยตัวตนเกี่ยวกับฟีเจอร์ที่ใช้ — ไม่รวมถึงสิ่งที่คุณพิมพ์ เซิร์ฟเวอร์ของคุณ หรือสิ่งอื่นใดที่ระบุถึงตัวคุณ";
 "Hide Hidden Files" = "ซ่อนไฟล์ที่ซ่อน";
 "Hide Sidebar" = "ซ่อนแถบด้านข้าง";
 "Hide search" = "ซ่อนการค้นหา";
@@ -1241,7 +1241,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro ขจัดทุกขีดจำกัดของพื้นที่ทำงาน เซิร์ฟเวอร์ และแท็บ";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro ปลดล็อกพื้นที่ทำงาน เซิร์ฟเวอร์และการเชื่อมต่อไม่จำกัด";
 "Processing" = "กำลังประมวลผล";
-"Rate VVTerm" = "ให้คะแนน VVTerm";
+"Rate Ghostex" = "ให้คะแนน Ghostex";
 "Read" = "อ่าน";
 "Reconnecting (attempt %lld)…" = "กำลังเชื่อมต่อใหม่ (ลอง %lld)...";
 "Reconnecting…" = "กำลังเชื่อมต่อใหม่...";
@@ -1381,11 +1381,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "การใช้ทางเลือก SSH สำหรับเซสชันนี้ (สภาพแวดล้อมระยะไกลที่แก้ไขแล้วไม่รองรับ Mosh)";
 "Using SSH fallback for this session (mosh-server is missing)." = "การใช้ทางเลือก SSH สำหรับเซสชันนี้ (เซิร์ฟเวอร์ mosh หายไป)";
 "Using SSH fallback for this session." = "การใช้ทางเลือก SSH สำหรับเซสชันนี้";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm มีโฮสต์ SSH ที่เชื่อถือได้ %lld บนอุปกรณ์นี้ การรีเซ็ตโฮสต์ที่เชื่อถือได้จะทำให้ VVTerm เชื่อถือคีย์โฮสต์ที่แสดงในการเชื่อมต่อครั้งถัดไป";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm มีโฮสต์ SSH ที่เชื่อถือได้ 1 รายการบนอุปกรณ์นี้ การรีเซ็ตโฮสต์ที่เชื่อถือได้จะทำให้ VVTerm เชื่อถือคีย์โฮสต์ที่แสดงในการเชื่อมต่อครั้งถัดไป";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm บันทึกคีย์โฮสต์ SSH อื่นสำหรับ %@ ดำเนินการต่อเฉพาะในกรณีที่คุณสร้างเซิร์ฟเวอร์นี้ขึ้นใหม่หรือเชื่อถือโฮสต์ใหม่";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm จะลืมลายนิ้วมือโฮสต์ SSH ที่บันทึกไว้ทั้งหมดบนอุปกรณ์นี้ การเชื่อมต่อครั้งต่อไปกับแต่ละโฮสต์จะเชื่อถือคีย์ที่นำเสนอ";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm จะลืมคีย์โฮสต์ SSH ที่บันทึกไว้และเชื่อมต่อใหม่";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex มีโฮสต์ SSH ที่เชื่อถือได้ %lld บนอุปกรณ์นี้ การรีเซ็ตโฮสต์ที่เชื่อถือได้จะทำให้ Ghostex เชื่อถือคีย์โฮสต์ที่แสดงในการเชื่อมต่อครั้งถัดไป";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex มีโฮสต์ SSH ที่เชื่อถือได้ 1 รายการบนอุปกรณ์นี้ การรีเซ็ตโฮสต์ที่เชื่อถือได้จะทำให้ Ghostex เชื่อถือคีย์โฮสต์ที่แสดงในการเชื่อมต่อครั้งถัดไป";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex บันทึกคีย์โฮสต์ SSH อื่นสำหรับ %@ ดำเนินการต่อเฉพาะในกรณีที่คุณสร้างเซิร์ฟเวอร์นี้ขึ้นใหม่หรือเชื่อถือโฮสต์ใหม่";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex จะลืมลายนิ้วมือโฮสต์ SSH ที่บันทึกไว้ทั้งหมดบนอุปกรณ์นี้ การเชื่อมต่อครั้งต่อไปกับแต่ละโฮสต์จะเชื่อถือคีย์ที่นำเสนอ";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex จะลืมคีย์โฮสต์ SSH ที่บันทึกไว้และเชื่อมต่อใหม่";
 "Welcome to Pro" = "ยินดีต้อนรับสู่โปร";
 "Without tmux, app backgrounding can interrupt running commands." = "หากไม่มี tmux พื้นหลังของแอปอาจขัดจังหวะคำสั่งที่รันอยู่";
 "Write" = "เขียน";

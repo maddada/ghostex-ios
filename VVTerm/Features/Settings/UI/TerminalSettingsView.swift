@@ -522,9 +522,9 @@ struct TerminalSettingsView: View {
     private var knownHostsFooterText: String {
         let count = Int64(knownHostCount)
         if count == 1 {
-            return String(localized: "VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection.")
+            return String(localized: "Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection.")
         }
-        return String(format: String(localized: "VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection."), count)
+        return String(format: String(localized: "Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection."), count)
     }
 
     var body: some View {
@@ -581,7 +581,7 @@ struct TerminalSettingsView: View {
                 refreshKnownHostCount()
             }
         } message: {
-            Text("VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.")
+            Text("Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.")
         }
         .onChange(of: themeName) { _ in
             ensureThemeSelectionIsValid()

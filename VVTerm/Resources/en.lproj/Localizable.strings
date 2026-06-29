@@ -14,7 +14,7 @@
 "Retry" = "Retry";
 "Upgrade" = "Upgrade";
 "Upgrade to Pro" = "Upgrade to Pro";
-"Upgrade to VVTerm Pro" = "Upgrade to VVTerm Pro";
+"Upgrade to Ghostex Pro" = "Upgrade to Ghostex Pro";
 "View Plans" = "View Plans";
 "Manage Subscription" = "Manage Subscription";
 "Manage subscription" = "Manage subscription";
@@ -74,8 +74,8 @@
 "Copied" = "Copied";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "About VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "About Ghostex";
 "Version %@ (%@)" = "Version %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "Professional SSH client\nfor macOS & iOS";
 "Visit Website" = "Visit Website";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "Welcome to VVTerm";
+"Welcome to Ghostex" = "Welcome to Ghostex";
 "Your secure SSH terminal" = "Terminal, files, and live server stats in one place.";
 "Continue" = "Continue";
 "SSH Terminal" = "SSH Terminal";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "Interval: %llds";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "Upgrade for unlimited features";
 "Unlimited Servers" = "Unlimited Servers";
 "Add as many servers as you need (free: 3)" = "Add as many servers as you need (free: 3)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "WORKSPACE";
 "SERVERS" = "SERVERS";
-"Support VVTerm" = "Support VVTerm";
+"Support Ghostex" = "Support Ghostex";
 "All" = "All";
 "Custom..." = "Custom...";
 "Unlock with Pro" = "Unlock with Pro";
@@ -725,10 +725,10 @@
 "%lld windows" = "%lld windows";
 "New session" = "New session";
 "Skip tmux" = "Skip tmux";
-"Create VVTerm session" = "Create VVTerm session";
+"Create Ghostex session" = "Create Ghostex session";
 "Ask every time" = "Ask every time";
 "Use remembered session" = "Use remembered session";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "Always create or attach to a VVTerm-managed tmux session for this connection.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "Always create or attach to a Ghostex-managed tmux session for this connection.";
 "Show a prompt on each new tab or split so you can choose a session." = "Show a prompt on each new tab or split so you can choose a session.";
 "Start a normal shell without tmux session persistence." = "Start a normal shell without tmux session persistence.";
 "Automatically attach to the last tmux session you selected." = "Automatically attach to the last tmux session you selected.";
@@ -749,13 +749,13 @@
 "Set a device passcode before using biometric authentication." = "Set a device passcode before using biometric authentication.";
 "Biometric authentication is locked. Unlock the device and try again." = "Biometric authentication is locked. Unlock the device and try again.";
 "Authentication failed." = "Authentication failed.";
-"Enable %@ for VVTerm" = "Enable %@ for VVTerm";
-"Unlock VVTerm with %@" = "Unlock VVTerm with %@";
+"Enable %@ for Ghostex" = "Enable %@ for Ghostex";
+"Unlock Ghostex with %@" = "Unlock Ghostex with %@";
 "Unlock server %@" = "Unlock server %@";
 "Unlock with %@" = "Unlock with %@";
-"VVTerm is locked" = "VVTerm is locked";
+"Ghostex is locked" = "Ghostex is locked";
 "Require %@ to open this server" = "Require %@ to open this server";
-"Require %@ to open VVTerm" = "Require %@ to open VVTerm";
+"Require %@ to open Ghostex" = "Require %@ to open Ghostex";
 "Lock when app goes to background" = "Lock when app goes to background";
 "Privacy Mode" = "Privacy Mode";
 "Re-auth grace period" = "Re-auth grace period";
@@ -1121,8 +1121,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "Free plan allows %lld active connection. Disconnect another server or upgrade.";
 "From" = "From";
 "Group" = "Group";
-"Help Improve VVTerm" = "Help Improve VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you.";
+"Help Improve Ghostex" = "Help Improve Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you.";
 "Hide Hidden Files" = "Hide Hidden Files";
 "Hide Sidebar" = "Hide Sidebar";
 "Hide search" = "Hide search";
@@ -1240,7 +1240,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro removes every limit on workspaces, servers, and tabs.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro unlocks unlimited workspaces, servers, and connections.";
 "Processing" = "Processing";
-"Rate VVTerm" = "Rate VVTerm";
+"Rate Ghostex" = "Rate Ghostex";
 "Read" = "Read";
 "Reconnecting (attempt %lld)…" = "Reconnecting (attempt %lld)…";
 "Reconnecting…" = "Reconnecting…";
@@ -1380,11 +1380,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment).";
 "Using SSH fallback for this session (mosh-server is missing)." = "Using SSH fallback for this session (mosh-server is missing).";
 "Using SSH fallback for this session." = "Using SSH fallback for this session.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm will forget the saved SSH host key and reconnect.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex will forget the saved SSH host key and reconnect.";
 "Welcome to Pro" = "Welcome to Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "Without tmux, app backgrounding can interrupt running commands.";
 "Write" = "Write";

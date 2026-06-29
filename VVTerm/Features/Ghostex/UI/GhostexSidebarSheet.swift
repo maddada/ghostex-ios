@@ -148,7 +148,7 @@ struct GhostexSidebarSheet: View {
                 GhostexEmptyState(
                     title: "No Servers",
                     systemImage: "server.rack",
-                    description: "Add a VVTerm server for the Mac that runs the Ghostex CLI."
+                    description: "Add a Ghostex server for the Mac that runs the Ghostex CLI."
                 )
             } else {
                 Picker("Ghostex Host", selection: Binding(
@@ -182,7 +182,7 @@ struct GhostexSidebarSheet: View {
             CDXC:iOSRemoteSessions 2026-06-11-23:52:
             iOS should describe the status path as SSH to the Mac plus gxserver-backed CLI inventory. The macOS app does not need to stay open for session statuses.
             */
-            Text("Ghostex uses the selected VVTerm server and its Keychain credentials to run the Mac-hosted Ghostex CLI against GX server.")
+            Text("Ghostex uses the selected Ghostex server and its Keychain credentials to run the Mac-hosted Ghostex CLI against GX server.")
         }
     }
 

@@ -25,6 +25,10 @@ private struct iOSWelcomeContent: View {
     @State private var showingProUpgrade = false
 
     var body: some View {
+        /*
+        CDXC:iOSBranding 2026-06-29-22:21:
+        User-facing iOS copy must call the app Ghostex with a capital G, even though upstream types, bundle internals, and imported VVTerm code keep their original names.
+        */
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
@@ -43,7 +47,7 @@ private struct iOSWelcomeContent: View {
                     }
 
                     // Header
-                    Text("Welcome to VVTerm")
+                    Text("Welcome to Ghostex")
                         .font(.title)
                         .fontWeight(.bold)
                         .padding(.top, 18)
@@ -154,7 +158,7 @@ private struct macOSWelcomeContent: View {
                     }
 
                     // Header
-                    Text("Welcome to VVTerm")
+                    Text("Welcome to Ghostex")
                         .font(.system(size: 28, weight: .bold))
                         .padding(.top, 16)
                         .padding(.bottom, 8)

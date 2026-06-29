@@ -1,7 +1,7 @@
 import Foundation
 
 enum TmuxStartupBehavior: String, Codable, CaseIterable, Identifiable {
-    /// Current behavior: always attach to a VVTerm-managed tmux session.
+    /// Current behavior: always attach to a Ghostex-managed tmux session.
     case vvtermManaged
     /// Ask user on each new connection.
     case askEveryTime
@@ -15,7 +15,7 @@ enum TmuxStartupBehavior: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .vvtermManaged:
-            return String(localized: "Create VVTerm session")
+            return String(localized: "Create Ghostex session")
         case .askEveryTime:
             return String(localized: "Ask every time")
         case .skipTmux:
@@ -26,7 +26,7 @@ enum TmuxStartupBehavior: String, Codable, CaseIterable, Identifiable {
     var descriptionText: String {
         switch self {
         case .vvtermManaged:
-            return String(localized: "Always create or attach to a VVTerm-managed tmux session for this connection.")
+            return String(localized: "Always create or attach to a Ghostex-managed tmux session for this connection.")
         case .askEveryTime:
             return String(localized: "Show a prompt on each new tab or split so you can choose a session.")
         case .skipTmux:

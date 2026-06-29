@@ -110,11 +110,11 @@ struct TerminalContainerView: View {
 
     private var retrustHostConfirmationMessage: String {
         guard let server else {
-            return String(localized: "VVTerm will forget the saved SSH host key and reconnect.")
+            return String(localized: "Ghostex will forget the saved SSH host key and reconnect.")
         }
         let endpoint = "\(server.host):\(server.port)"
         return String(
-            format: String(localized: "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
+            format: String(localized: "Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
             endpoint
         )
     }

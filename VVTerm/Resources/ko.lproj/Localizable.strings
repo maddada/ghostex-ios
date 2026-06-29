@@ -14,7 +14,7 @@
 "Retry" = "재시도";
 "Upgrade" = "업그레이드";
 "Upgrade to Pro" = "Pro로 업그레이드";
-"Upgrade to VVTerm Pro" = "VVTerm Pro로 업그레이드";
+"Upgrade to Ghostex Pro" = "Ghostex Pro로 업그레이드";
 "View Plans" = "플랜 보기";
 "Manage Subscription" = "구독 관리";
 "Manage subscription" = "구독 관리";
@@ -74,8 +74,8 @@
 "Copied" = "복사됨";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "VVTerm 정보";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "Ghostex 정보";
 "Version %@ (%@)" = "버전 %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "macOS 및 iOS용\n전문 SSH 클라이언트";
 "Visit Website" = "웹사이트 방문";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "VVTerm에 오신 것을 환영합니다";
+"Welcome to Ghostex" = "Ghostex에 오신 것을 환영합니다";
 "Your secure SSH terminal" = "터미널, 파일, 실시간 서버 통계를 한곳에서.";
 "Continue" = "계속";
 "SSH Terminal" = "SSH 터미널";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "간격: %lld초";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "무제한 기능을 위해 업그레이드";
 "Unlimited Servers" = "무제한 서버";
 "Add as many servers as you need (free: 3)" = "필요한 만큼 서버를 추가하세요 (무료: 3개)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "워크스페이스";
 "SERVERS" = "서버";
-"Support VVTerm" = "VVTerm 지원";
+"Support Ghostex" = "Ghostex 지원";
 "All" = "전체";
 "Custom..." = "사용자 정의...";
 "Unlock with Pro" = "Pro로 잠금 해제";
@@ -725,10 +725,10 @@
 "%lld windows" = "%lld 윈도우";
 "New session" = "새 세션";
 "Skip tmux" = "tmux 건너뛰기";
-"Create VVTerm session" = "VVTerm 세션 생성";
+"Create Ghostex session" = "Ghostex 세션 생성";
 "Ask every time" = "매번 확인";
 "Use remembered session" = "기억된 세션 사용";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "이 연결에서 VVTerm이 관리하는 tmux 세션을 항상 생성하거나 연결합니다.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "이 연결에서 Ghostex이 관리하는 tmux 세션을 항상 생성하거나 연결합니다.";
 "Show a prompt on each new tab or split so you can choose a session." = "새 탭이나 분할 시 프롬프트를 표시하여 세션을 선택할 수 있습니다.";
 "Start a normal shell without tmux session persistence." = "tmux 세션 유지 없이 일반 셸을 시작합니다.";
 "Automatically attach to the last tmux session you selected." = "마지막으로 선택한 tmux 세션에 자동으로 연결합니다.";
@@ -749,13 +749,13 @@
 "Set a device passcode before using biometric authentication." = "생체 인증을 사용하기 전에 기기 암호를 설정하세요.";
 "Biometric authentication is locked. Unlock the device and try again." = "생체 인증이 잠겨 있습니다. 기기를 잠금 해제하고 다시 시도하세요.";
 "Authentication failed." = "인증에 실패했습니다.";
-"Enable %@ for VVTerm" = "VVTerm에서 %@ 활성화";
-"Unlock VVTerm with %@" = "%@으로 VVTerm 잠금 해제";
+"Enable %@ for Ghostex" = "Ghostex에서 %@ 활성화";
+"Unlock Ghostex with %@" = "%@으로 Ghostex 잠금 해제";
 "Unlock server %@" = "서버 %@ 잠금 해제";
 "Unlock with %@" = "%@으로 잠금 해제";
-"VVTerm is locked" = "VVTerm이 잠겨 있습니다";
+"Ghostex is locked" = "Ghostex이 잠겨 있습니다";
 "Require %@ to open this server" = "이 서버를 열려면 %@이(가) 필요합니다";
-"Require %@ to open VVTerm" = "VVTerm을 열려면 %@이(가) 필요합니다";
+"Require %@ to open Ghostex" = "Ghostex을 열려면 %@이(가) 필요합니다";
 "Lock when app goes to background" = "앱이 백그라운드로 전환될 때 잠금";
 "Privacy Mode" = "프라이버시 모드";
 "Re-auth grace period" = "재인증 유예 기간";
@@ -1121,8 +1121,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "무료 플랜에서는 %lld 활성 연결을 허용합니다. 다른 서버의 연결을 끊거나 업그레이드하세요.";
 "From" = "에서";
 "Group" = "그룹";
-"Help Improve VVTerm" = "VVTerm 개선에 도움을 주세요";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "개선에 도움 VVTerm은 어떤 기능이 사용되는지에 대한 익명 통계를 공유합니다. 사용자가 입력하는 내용, 서버 또는 사용자를 식별하는 어떤 것도 공유하지 않습니다.";
+"Help Improve Ghostex" = "Ghostex 개선에 도움을 주세요";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "개선에 도움 Ghostex은 어떤 기능이 사용되는지에 대한 익명 통계를 공유합니다. 사용자가 입력하는 내용, 서버 또는 사용자를 식별하는 어떤 것도 공유하지 않습니다.";
 "Hide Hidden Files" = "숨겨진 파일 숨기기";
 "Hide Sidebar" = "사이드바 숨기기";
 "Hide search" = "검색 숨기기";
@@ -1240,7 +1240,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro는 작업 공간, 서버 및 탭에 대한 모든 제한을 제거합니다.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro는 무제한 작업 공간, 서버 및 연결을 잠금 해제합니다.";
 "Processing" = "처리";
-"Rate VVTerm" = "VVTerm 평가하기";
+"Rate Ghostex" = "Ghostex 평가하기";
 "Read" = "읽기";
 "Reconnecting (attempt %lld)…" = "다시 연결하는 중(%lld 시도)…";
 "Reconnecting…" = "다시 연결 중…";
@@ -1380,11 +1380,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "이 세션에 SSH 대체를 사용합니다(해결된 원격 환경에서는 Mosh가 지원되지 않습니다).";
 "Using SSH fallback for this session (mosh-server is missing)." = "이 세션에 SSH 대체를 사용합니다(mosh-server가 누락됨).";
 "Using SSH fallback for this session." = "이 세션에 SSH 대체를 사용합니다.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm에는 이 장치에 %lld 신뢰할 수 있는 SSH 호스트가 있습니다. 신뢰할 수 있는 호스트를 재설정하면 VVTerm이 다음 연결 시 제공되는 호스트 키를 신뢰하게 됩니다.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm에는 이 장치에 신뢰할 수 있는 SSH 호스트가 1개 있습니다. 신뢰할 수 있는 호스트를 재설정하면 VVTerm이 다음 연결 시 제공되는 호스트 키를 신뢰하게 됩니다.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm이 %@에 대해 다른 SSH 호스트 키를 저장했습니다. 이 서버를 다시 생성했거나 새 호스트를 신뢰하는 경우에만 계속하십시오.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm은 이 장치에 저장된 모든 SSH 호스트 지문을 삭제합니다. 각 호스트에 대한 다음 연결은 제시된 키를 신뢰합니다.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm은 저장된 SSH 호스트 키를 잊어버리고 다시 연결합니다.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex에는 이 장치에 %lld 신뢰할 수 있는 SSH 호스트가 있습니다. 신뢰할 수 있는 호스트를 재설정하면 Ghostex이 다음 연결 시 제공되는 호스트 키를 신뢰하게 됩니다.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex에는 이 장치에 신뢰할 수 있는 SSH 호스트가 1개 있습니다. 신뢰할 수 있는 호스트를 재설정하면 Ghostex이 다음 연결 시 제공되는 호스트 키를 신뢰하게 됩니다.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex이 %@에 대해 다른 SSH 호스트 키를 저장했습니다. 이 서버를 다시 생성했거나 새 호스트를 신뢰하는 경우에만 계속하십시오.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex은 이 장치에 저장된 모든 SSH 호스트 지문을 삭제합니다. 각 호스트에 대한 다음 연결은 제시된 키를 신뢰합니다.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex은 저장된 SSH 호스트 키를 잊어버리고 다시 연결합니다.";
 "Welcome to Pro" = "프로에 오신 것을 환영합니다";
 "Without tmux, app backgrounding can interrupt running commands." = "tmux가 없으면 앱 백그라운드로 인해 실행 중인 명령이 중단될 수 있습니다.";
 "Write" = "쓰기";

@@ -7,7 +7,7 @@ import UIKit
 /// Anonymous product analytics sent to the self-hosted Umami instance.
 /// Every event is faceless: feature names, counts, and app context only —
 /// never commands, server addresses, usernames, or anything identifying.
-/// Fully disabled via the "Help Improve VVTerm" toggle in Settings.
+/// Fully disabled via the "Help Improve Ghostex" toggle in Settings.
 @MainActor
 final class AnalyticsTracker {
     static let shared = AnalyticsTracker()
@@ -142,7 +142,7 @@ final class AnalyticsTracker {
         let event = TrackEventRequest(
             source: .website(Self.websiteId),
             data: payload,
-            title: "VVTerm App",
+            title: "Ghostex App",
             url: url,
             name: name
         )

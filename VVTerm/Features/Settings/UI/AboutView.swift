@@ -33,7 +33,7 @@ final class AboutWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = String(localized: "About VVTerm")
+        window.title = String(localized: "About Ghostex")
         window.contentView = hostingView
         window.center()
         window.isReleasedWhenClosed = false
@@ -62,7 +62,7 @@ struct AboutView: View {
                     .cornerRadius(18)
                     .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
 
-                Text("VVTerm")
+                Text("Ghostex")
                     .font(.system(size: 24, weight: .bold))
 
                 Text(String(format: String(localized: "Version %@ (%@)"), appVersion, buildNumber))

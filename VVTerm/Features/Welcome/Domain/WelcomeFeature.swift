@@ -40,7 +40,7 @@ enum WelcomeFeatureCatalog {
         WelcomeFeature(
             icon: "macbook.and.iphone",
             title: companionPlatformTitle,
-            description: "VVTerm is available on iPhone, iPad, and Mac. Pro purchases carry over with the same Apple ID.",
+            description: "Ghostex is available on iPhone, iPad, and Mac. Pro purchases carry over with the same Apple ID.",
             color: .blue
         ),
         WelcomeFeature(

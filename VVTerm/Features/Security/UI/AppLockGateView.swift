@@ -78,7 +78,7 @@ struct AppLockGateView: View {
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.secondary)
 
-                Text(String(localized: "VVTerm is locked"))
+                Text(String(localized: "Ghostex is locked"))
                     .font(.headline)
 
                 if let message = appLockManager.lastErrorMessage, !message.isEmpty {

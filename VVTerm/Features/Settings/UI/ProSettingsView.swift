@@ -190,7 +190,7 @@ struct ProSettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Upgrade to VVTerm Pro")
+                    Text("Upgrade to Ghostex Pro")
                         .font(.headline)
                     Text("Unlimited servers & workspaces")
                         .font(.callout)

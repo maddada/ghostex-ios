@@ -14,7 +14,7 @@
 "Retry" = "Thử lại";
 "Upgrade" = "Nâng cấp";
 "Upgrade to Pro" = "Nâng cấp lên Pro";
-"Upgrade to VVTerm Pro" = "Nâng cấp lên VVTerm Pro";
+"Upgrade to Ghostex Pro" = "Nâng cấp lên Ghostex Pro";
 "View Plans" = "Xem gói";
 "Manage Subscription" = "Quản lý đăng ký";
 "Manage subscription" = "Quản lý đăng ký";
@@ -83,8 +83,8 @@
 "Copied" = "Đã sao chép";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "Giới thiệu VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "Giới thiệu Ghostex";
 "Version %@ (%@)" = "Phiên bản %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "Trình khách SSH chuyên nghiệp\ncho macOS & iOS";
 "Visit Website" = "Truy cập website";
@@ -96,7 +96,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "Chào mừng đến với VVTerm";
+"Welcome to Ghostex" = "Chào mừng đến với Ghostex";
 "Your secure SSH terminal" = "Terminal, tệp và thống kê máy chủ trực tiếp trong cùng một nơi.";
 "Continue" = "Tiếp tục";
 "SSH Terminal" = "Terminal SSH";
@@ -162,7 +162,7 @@
 "Interval: %llds" = "Khoảng thời gian: %lld giây";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "Nâng cấp để dùng tính năng không giới hạn";
 "Unlimited Servers" = "Máy chủ không giới hạn";
 "Add as many servers as you need (free: 3)" = "Thêm bao nhiêu máy chủ tùy ý (miễn phí: 3)";
@@ -297,7 +297,7 @@
 "WORKSPACE" = "KHÔNG GIAN LÀM VIỆC";
 
 "SERVERS" = "MÁY CHỦ";
-"Support VVTerm" = "Ủng hộ VVTerm";
+"Support Ghostex" = "Ủng hộ Ghostex";
 "All" = "Tất cả";
 "Custom..." = "Tùy chỉnh...";
 
@@ -770,10 +770,10 @@
 "%lld windows" = "%lld cửa sổ";
 "New session" = "Phiên mới";
 "Skip tmux" = "Bỏ qua tmux";
-"Create VVTerm session" = "Tạo phiên VVTerm";
+"Create Ghostex session" = "Tạo phiên Ghostex";
 "Ask every time" = "Hỏi mỗi lần";
 "Use remembered session" = "Dùng phiên đã ghi nhớ";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "Luôn tạo hoặc gắn vào phiên tmux do VVTerm quản lý cho kết nối này.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "Luôn tạo hoặc gắn vào phiên tmux do Ghostex quản lý cho kết nối này.";
 "Show a prompt on each new tab or split so you can choose a session." = "Hiển thị lời nhắc ở mỗi tab mới hoặc khi chia màn hình để bạn có thể chọn phiên.";
 "Start a normal shell without tmux session persistence." = "Bắt đầu shell bình thường mà không dùng cơ chế lưu phiên tmux.";
 "Automatically attach to the last tmux session you selected." = "Tự động gắn vào phiên tmux gần nhất bạn đã chọn.";
@@ -794,13 +794,13 @@
 "Set a device passcode before using biometric authentication." = "Hãy đặt mật mã thiết bị trước khi dùng xác thực sinh trắc học.";
 "Biometric authentication is locked. Unlock the device and try again." = "Xác thực sinh trắc học đang bị khóa. Hãy mở khóa thiết bị và thử lại.";
 "Authentication failed." = "Xác thực thất bại.";
-"Enable %@ for VVTerm" = "Bật %@ cho VVTerm";
-"Unlock VVTerm with %@" = "Mở khóa VVTerm bằng %@";
+"Enable %@ for Ghostex" = "Bật %@ cho Ghostex";
+"Unlock Ghostex with %@" = "Mở khóa Ghostex bằng %@";
 "Unlock server %@" = "Mở khóa máy chủ %@";
 "Unlock with %@" = "Mở khóa bằng %@";
-"VVTerm is locked" = "VVTerm đã bị khóa";
+"Ghostex is locked" = "Ghostex đã bị khóa";
 "Require %@ to open this server" = "Yêu cầu %@ để mở máy chủ này";
-"Require %@ to open VVTerm" = "Yêu cầu %@ để mở VVTerm";
+"Require %@ to open Ghostex" = "Yêu cầu %@ để mở Ghostex";
 "Lock when app goes to background" = "Khóa khi ứng dụng vào nền";
 "Privacy Mode" = "Chế độ riêng tư";
 "Re-auth grace period" = "Thời gian gia hạn xác thực lại";
@@ -1167,8 +1167,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "Gói miễn phí cho phép %lld kết nối hoạt động. Ngắt kết nối máy chủ khác hoặc nâng cấp.";
 "From" = "Từ";
 "Group" = "Nhóm";
-"Help Improve VVTerm" = "Giúp cải thiện VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Trợ giúp Cải thiện VVTerm chia sẻ số liệu thống kê ẩn danh về những tính năng được sử dụng - không bao giờ những gì bạn nhập, máy chủ của bạn hoặc bất kỳ điều gì nhận dạng bạn.";
+"Help Improve Ghostex" = "Giúp cải thiện Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Trợ giúp Cải thiện Ghostex chia sẻ số liệu thống kê ẩn danh về những tính năng được sử dụng - không bao giờ những gì bạn nhập, máy chủ của bạn hoặc bất kỳ điều gì nhận dạng bạn.";
 "Hide Hidden Files" = "Ẩn tập tin ẩn";
 "Hide Sidebar" = "Ẩn thanh bên";
 "Hide search" = "Ẩn tìm kiếm";
@@ -1286,7 +1286,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro loại bỏ mọi giới hạn về không gian làm việc, máy chủ và tab.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro mở khóa không gian làm việc, máy chủ và kết nối không giới hạn.";
 "Processing" = "Đang xử lý";
-"Rate VVTerm" = "Đánh giá VVTerm";
+"Rate Ghostex" = "Đánh giá Ghostex";
 "Read" = "Đọc";
 "Reconnecting (attempt %lld)…" = "Đang kết nối lại (cố gắng %lld)…";
 "Reconnecting…" = "Đang kết nối lại…";
@@ -1426,11 +1426,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "Sử dụng dự phòng SSH cho phiên này (Mosh không được môi trường từ xa đã giải quyết hỗ trợ).";
 "Using SSH fallback for this session (mosh-server is missing)." = "Sử dụng dự phòng SSH cho phiên này (thiếu máy chủ mosh).";
 "Using SSH fallback for this session." = "Sử dụng dự phòng SSH cho phiên này.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm có máy chủ SSH đáng tin cậy %lld trên thiết bị này. Việc đặt lại các máy chủ đáng tin cậy khiến VVTerm tin cậy vào khóa máy chủ được trình bày trong kết nối tiếp theo.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm có 1 máy chủ SSH đáng tin cậy trên thiết bị này. Việc đặt lại các máy chủ đáng tin cậy khiến VVTerm tin cậy vào khóa máy chủ được trình bày trong kết nối tiếp theo.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm đã lưu khóa máy chủ SSH khác cho %@. Chỉ tiếp tục nếu bạn đã tạo lại máy chủ này hoặc tin cậy máy chủ mới.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm sẽ quên tất cả dấu vân tay máy chủ SSH đã lưu trên thiết bị này. Kết nối tiếp theo tới mỗi máy chủ sẽ tin cậy vào khóa mà nó trình bày.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm sẽ quên khóa máy chủ SSH đã lưu và kết nối lại.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex có máy chủ SSH đáng tin cậy %lld trên thiết bị này. Việc đặt lại các máy chủ đáng tin cậy khiến Ghostex tin cậy vào khóa máy chủ được trình bày trong kết nối tiếp theo.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex có 1 máy chủ SSH đáng tin cậy trên thiết bị này. Việc đặt lại các máy chủ đáng tin cậy khiến Ghostex tin cậy vào khóa máy chủ được trình bày trong kết nối tiếp theo.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex đã lưu khóa máy chủ SSH khác cho %@. Chỉ tiếp tục nếu bạn đã tạo lại máy chủ này hoặc tin cậy máy chủ mới.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex sẽ quên tất cả dấu vân tay máy chủ SSH đã lưu trên thiết bị này. Kết nối tiếp theo tới mỗi máy chủ sẽ tin cậy vào khóa mà nó trình bày.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex sẽ quên khóa máy chủ SSH đã lưu và kết nối lại.";
 "Welcome to Pro" = "Chào mừng đến với Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "Nếu không có tmux, việc chạy nền ứng dụng có thể làm gián đoạn các lệnh đang chạy.";
 "Write" = "Viết";

@@ -83,56 +83,11 @@ struct SettingsView: View {
         .frame(minWidth: 700, minHeight: 500)
         #else
         NavigationStack {
+            /*
+            CDXC:iOSSettingsBranding 2026-06-29-22:21:
+            Ghostex iOS settings must not surface upstream VVTerm branding or the commercial/about entry points requested for removal. Keep the Pro and About rows out of the iPhone settings navigation while shared/internal VVTerm symbols remain unchanged.
+            */
             List {
-                // Pro card at top
-                Section {
-                    NavigationLink {
-                        ProSettingsView()
-                            .navigationTitle("VVTerm Pro")
-                            .navigationBarTitleDisplayMode(.inline)
-                            .adaptiveSoftScrollEdges()
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(LinearGradient(
-                                        colors: [Color.orange, Color(red: 0.95, green: 0.5, blue: 0.2)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("VVTerm Pro")
-                                    .font(.headline)
-                                Text(storeManager.isPro ? String(localized: "Manage subscription") : String(localized: "Upgrade for unlimited features"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Text(storeManager.isPro ? String(localized: "PRO") : String(localized: "FREE_PLAN"))
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(storeManager.isPro ? .white : .primary.opacity(0.7))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(storeManager.isPro
-                                            ? Color.orange
-                                            : Color.primary.opacity(0.12)
-                                        )
-                                )
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
                 Section {
                     NavigationLink {
                         GeneralSettingsView()
@@ -178,15 +133,6 @@ struct SettingsView: View {
                     } label: {
                         Label("Sync", systemImage: "icloud")
                     }
-
-                    NavigationLink {
-                        AboutSettingsView()
-                            .navigationTitle("About")
-                            .navigationBarTitleDisplayMode(.inline)
-                            .adaptiveSoftScrollEdges()
-                    } label: {
-                        Label("About", systemImage: "info.circle")
-                    }
                 }
             }
             .navigationTitle("Settings")
@@ -214,7 +160,7 @@ struct SettingsView: View {
         switch selection {
         case .pro:
                             ProSettingsView()
-                                .navigationTitle("VVTerm Pro")
+                                .navigationTitle("Ghostex Pro")
                                 .navigationSubtitle(storeManager.isPro
                                     ? String(localized: "Manage your subscription")
                                     : String(localized: "Upgrade for unlimited features")
@@ -245,7 +191,7 @@ struct SettingsView: View {
                                 .navigationSubtitle(String(localized: "Version and links"))
         case .none:
                             ProSettingsView()
-                                .navigationTitle("VVTerm Pro")
+                                .navigationTitle("Ghostex Pro")
                                 .navigationSubtitle(storeManager.isPro
                                     ? String(localized: "Manage your subscription")
                                     : String(localized: "Upgrade for unlimited features")

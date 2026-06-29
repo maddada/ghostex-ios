@@ -14,7 +14,7 @@
 "Retry" = "Zkusit znovu";
 "Upgrade" = "Upgradovat";
 "Upgrade to Pro" = "Upgradovat na Pro";
-"Upgrade to VVTerm Pro" = "Upgradovat na VVTerm Pro";
+"Upgrade to Ghostex Pro" = "Upgradovat na Ghostex Pro";
 "View Plans" = "Zobrazit plány";
 "Manage Subscription" = "Spravovat předplatné";
 "Manage subscription" = "Spravovat předplatné";
@@ -74,8 +74,8 @@
 "Copied" = "Zkopírováno";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "O VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "O Ghostex";
 "Version %@ (%@)" = "Verze %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "Profesionální SSH klient\npro macOS a iOS";
 "Visit Website" = "Navštívit web";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "Vítejte ve VVTerm";
+"Welcome to Ghostex" = "Vítejte ve Ghostex";
 "Your secure SSH terminal" = "Terminál, soubory a živé statistiky serveru na jednom místě.";
 "Continue" = "Pokračovat";
 "SSH Terminal" = "SSH terminál";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "Interval: %lld s";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "Upgradujte pro neomezené funkce";
 "Unlimited Servers" = "Neomezené servery";
 "Add as many servers as you need (free: 3)" = "Přidejte tolik serverů, kolik potřebujete (zdarma: 3)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "PRACOVNÍ PROSTOR";
 "SERVERS" = "SERVERY";
-"Support VVTerm" = "Podpořit VVTerm";
+"Support Ghostex" = "Podpořit Ghostex";
 "All" = "Vše";
 "Custom..." = "Vlastní...";
 "Unlock with Pro" = "Odemknout s Pro";
@@ -726,10 +726,10 @@
 "%lld windows" = "%lld oken";
 "New session" = "Nová relace";
 "Skip tmux" = "Přeskočit tmux";
-"Create VVTerm session" = "Vytvořit relaci VVTerm";
+"Create Ghostex session" = "Vytvořit relaci Ghostex";
 "Ask every time" = "Ptát se pokaždé";
 "Use remembered session" = "Použít zapamatovanou relaci";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "Pro toto připojení vždy vytvořte nebo připojte relaci tmux spravovanou aplikací VVTerm.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "Pro toto připojení vždy vytvořte nebo připojte relaci tmux spravovanou aplikací Ghostex.";
 "Show a prompt on each new tab or split so you can choose a session." = "Při každé nové kartě nebo rozdělení zobrazit výzvu, abyste si mohli vybrat relaci.";
 "Start a normal shell without tmux session persistence." = "Spustit běžný shell bez perzistence relace tmux.";
 "Automatically attach to the last tmux session you selected." = "Automaticky připojit poslední vybranou relaci tmux.";
@@ -750,13 +750,13 @@
 "Set a device passcode before using biometric authentication." = "Před použitím biometrického ověřování nastavte kód zařízení.";
 "Biometric authentication is locked. Unlock the device and try again." = "Biometrické ověřování je uzamčeno. Odemkněte zařízení a zkuste to znovu.";
 "Authentication failed." = "Ověření se nezdařilo.";
-"Enable %@ for VVTerm" = "Povolit %@ pro VVTerm";
-"Unlock VVTerm with %@" = "Odemknout VVTerm pomocí %@";
+"Enable %@ for Ghostex" = "Povolit %@ pro Ghostex";
+"Unlock Ghostex with %@" = "Odemknout Ghostex pomocí %@";
 "Unlock server %@" = "Odemknout server %@";
 "Unlock with %@" = "Odemknout pomocí %@";
-"VVTerm is locked" = "VVTerm je zamčený";
+"Ghostex is locked" = "Ghostex je zamčený";
 "Require %@ to open this server" = "Vyžadovat %@ pro otevření tohoto serveru";
-"Require %@ to open VVTerm" = "Vyžadovat %@ pro otevření VVTerm";
+"Require %@ to open Ghostex" = "Vyžadovat %@ pro otevření Ghostex";
 "Lock when app goes to background" = "Uzamknout při přechodu aplikace na pozadí";
 "Privacy Mode" = "Režim soukromí";
 "Re-auth grace period" = "Doba odkladu opětovného ověření";
@@ -1123,8 +1123,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "Bezplatný plán umožňuje %lld aktivní připojení. Odpojte jiný server nebo upgradujte.";
 "From" = "Od";
 "Group" = "Skupina";
-"Help Improve VVTerm" = "Pomozte zlepšit VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Pomozte zlepšit VVTerm sdílí anonymní statistiky o tom, které funkce se používají – nikdy to, co zadáte, vaše servery nebo cokoli, co vás identifikuje.";
+"Help Improve Ghostex" = "Pomozte zlepšit Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Pomozte zlepšit Ghostex sdílí anonymní statistiky o tom, které funkce se používají – nikdy to, co zadáte, vaše servery nebo cokoli, co vás identifikuje.";
 "Hide Hidden Files" = "Skrýt skryté soubory";
 "Hide Sidebar" = "Skrýt postranní panel";
 "Hide search" = "Skrýt vyhledávání";
@@ -1242,7 +1242,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro odstraňuje všechna omezení pracovních prostorů, serverů a karet.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro odemyká neomezené pracovní prostory, servery a připojení.";
 "Processing" = "Zpracování";
-"Rate VVTerm" = "Ohodnoťte VVTerm";
+"Rate Ghostex" = "Ohodnoťte Ghostex";
 "Read" = "Přečtěte si";
 "Reconnecting (attempt %lld)…" = "Opětovné připojení (pokus %lld)…";
 "Reconnecting…" = "Opětovné připojení…";
@@ -1382,11 +1382,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "Použití záložního protokolu SSH pro tuto relaci (Mosh není podporováno vyřešeným vzdáleným prostředím).";
 "Using SSH fallback for this session (mosh-server is missing)." = "Pro tuto relaci se používá záložní SSH (chybí server mosh).";
 "Using SSH fallback for this session." = "Použití záložního protokolu SSH pro tuto relaci.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm má na tomto zařízení %lld důvěryhodných hostitelů SSH. Resetováním důvěryhodných hostitelů zajistíte, že VVTerm bude důvěřovat hostitelskému klíči prezentovanému při příštím připojení.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm má na tomto zařízení 1 důvěryhodného hostitele SSH. Resetováním důvěryhodných hostitelů zajistíte, že VVTerm bude důvěřovat hostitelskému klíči prezentovanému při příštím připojení.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm uložil jiný klíč hostitele SSH pro %@. Pokračujte pouze v případě, že jste znovu vytvořili tento server nebo důvěřujete novému hostiteli.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm zapomene všechny uložené otisky hostitele SSH na tomto zařízení. Příští připojení ke každému hostiteli bude důvěřovat klíči, který prezentuje.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm zapomene uložený klíč hostitele SSH a znovu se připojí.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex má na tomto zařízení %lld důvěryhodných hostitelů SSH. Resetováním důvěryhodných hostitelů zajistíte, že Ghostex bude důvěřovat hostitelskému klíči prezentovanému při příštím připojení.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex má na tomto zařízení 1 důvěryhodného hostitele SSH. Resetováním důvěryhodných hostitelů zajistíte, že Ghostex bude důvěřovat hostitelskému klíči prezentovanému při příštím připojení.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex uložil jiný klíč hostitele SSH pro %@. Pokračujte pouze v případě, že jste znovu vytvořili tento server nebo důvěřujete novému hostiteli.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex zapomene všechny uložené otisky hostitele SSH na tomto zařízení. Příští připojení ke každému hostiteli bude důvěřovat klíči, který prezentuje.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex zapomene uložený klíč hostitele SSH a znovu se připojí.";
 "Welcome to Pro" = "Vítejte v Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "Bez tmux může pozadí aplikace přerušit spouštění příkazů.";
 "Write" = "Napište";

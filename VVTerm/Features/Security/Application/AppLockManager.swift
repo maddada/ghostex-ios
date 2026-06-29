@@ -102,7 +102,7 @@ final class AppLockManager: ObservableObject {
             return
         }
 
-        let reason = String(format: String(localized: "Enable %@ for VVTerm"), biometryDisplayName)
+        let reason = String(format: String(localized: "Enable %@ for Ghostex"), biometryDisplayName)
         guard await authenticate(reason: reason) else { return }
 
         fullAppLockEnabled = true
@@ -114,7 +114,7 @@ final class AppLockManager: ObservableObject {
         guard fullAppLockEnabled else { return true }
         guard isAppLocked else { return true }
 
-        let reason = String(format: String(localized: "Unlock VVTerm with %@"), biometryDisplayName)
+        let reason = String(format: String(localized: "Unlock Ghostex with %@"), biometryDisplayName)
         guard await authenticate(reason: reason) else { return false }
 
         isAppLocked = false

@@ -14,7 +14,7 @@
 "Retry" = "重试";
 "Upgrade" = "升级";
 "Upgrade to Pro" = "升级到 Pro";
-"Upgrade to VVTerm Pro" = "升级到 VVTerm Pro";
+"Upgrade to Ghostex Pro" = "升级到 Ghostex Pro";
 "View Plans" = "查看方案";
 "Manage Subscription" = "管理订阅";
 "Manage subscription" = "管理订阅";
@@ -74,8 +74,8 @@
 "Copied" = "已复制";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "关于 VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "关于 Ghostex";
 "Version %@ (%@)" = "版本 %@（%@）";
 "Professional SSH client\nfor macOS & iOS" = "专业 SSH 客户端\n适用于 macOS 和 iOS";
 "Visit Website" = "访问网站";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "欢迎使用 VVTerm";
+"Welcome to Ghostex" = "欢迎使用 Ghostex";
 "Your secure SSH terminal" = "终端、文件和实时服务器统计，尽在一处。";
 "Continue" = "继续";
 "SSH Terminal" = "SSH 终端";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "间隔：%lld 秒";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "升级以解锁无限功能";
 "Unlimited Servers" = "无限服务器";
 "Add as many servers as you need (free: 3)" = "添加任意数量服务器（免费：3）";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "工作区";
 "SERVERS" = "服务器";
-"Support VVTerm" = "支持 VVTerm";
+"Support Ghostex" = "支持 Ghostex";
 "All" = "全部";
 "Custom..." = "自定义...";
 "Unlock with Pro" = "使用 Pro 解锁";
@@ -722,10 +722,10 @@
 "%lld windows" = "%lld 个窗口";
 "New session" = "新建会话";
 "Skip tmux" = "跳过 tmux";
-"Create VVTerm session" = "创建 VVTerm 会话";
+"Create Ghostex session" = "创建 Ghostex 会话";
 "Ask every time" = "每次都询问";
 "Use remembered session" = "使用记住的会话";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "此连接始终创建或附加到由 VVTerm 管理的 tmux 会话。";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "此连接始终创建或附加到由 Ghostex 管理的 tmux 会话。";
 "Show a prompt on each new tab or split so you can choose a session." = "每次新建标签页或分屏时显示提示，让你选择会话。";
 "Start a normal shell without tmux session persistence." = "启动普通 Shell，不使用 tmux 会话持久化。";
 "Automatically attach to the last tmux session you selected." = "自动附加到你上次选择的 tmux 会话。";
@@ -746,13 +746,13 @@
 "Set a device passcode before using biometric authentication." = "使用生物认证前，请先设置设备密码。";
 "Biometric authentication is locked. Unlock the device and try again." = "生物认证已锁定。请解锁设备后再试一次。";
 "Authentication failed." = "认证失败。";
-"Enable %@ for VVTerm" = "为 VVTerm 启用%@";
-"Unlock VVTerm with %@" = "使用%@解锁 VVTerm";
+"Enable %@ for Ghostex" = "为 Ghostex 启用%@";
+"Unlock Ghostex with %@" = "使用%@解锁 Ghostex";
 "Unlock server %@" = "解锁服务器%@";
 "Unlock with %@" = "使用%@解锁";
-"VVTerm is locked" = "VVTerm 已锁定";
+"Ghostex is locked" = "Ghostex 已锁定";
 "Require %@ to open this server" = "打开此服务器需要%@";
-"Require %@ to open VVTerm" = "打开 VVTerm 需要%@";
+"Require %@ to open Ghostex" = "打开 Ghostex 需要%@";
 "Lock when app goes to background" = "应用进入后台时锁定";
 "Privacy Mode" = "隐私模式";
 "Re-auth grace period" = "重新认证宽限期";
@@ -1119,8 +1119,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "免费计划允许 %lld 主动连接。断开另一台服务器的连接或升级。";
 "From" = "从";
 "Group" = "集团";
-"Help Improve VVTerm" = "帮助改善 VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "帮助改进 VVTerm 共享有关使用哪些功能的匿名统计信息 - 绝不是您键入的内容、您的服务器或任何可识别您身份的信息。";
+"Help Improve Ghostex" = "帮助改善 Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "帮助改进 Ghostex 共享有关使用哪些功能的匿名统计信息 - 绝不是您键入的内容、您的服务器或任何可识别您身份的信息。";
 "Hide Hidden Files" = "隐藏隐藏文件";
 "Hide Sidebar" = "隐藏侧边栏";
 "Hide search" = "隐藏搜索";
@@ -1238,7 +1238,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro 移除工作区、服务器和标签页的所有限制。";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro 可解锁无限的工作空间、服务器和连接。";
 "Processing" = "加工";
-"Rate VVTerm" = "利率 VV 期限";
+"Rate Ghostex" = "利率 VV 期限";
 "Read" = "阅读";
 "Reconnecting (attempt %lld)…" = "正在重新连接（尝试 %lld）...";
 "Reconnecting…" = "正在重新连接...";
@@ -1378,11 +1378,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "为此会话使用 SSH 回退（已解析的远程环境不支持 Mosh）。";
 "Using SSH fallback for this session (mosh-server is missing)." = "为此会话使用 SSH 回退（缺少 mosh-server）。";
 "Using SSH fallback for this session." = "为此会话使用 SSH 回退。";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm 在此设备上有 %lld 受信任的 SSH 主机。重置受信任的主机使 VVTerm 信任下一次连接时出现的主机密钥。";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm 在此设备上有 1 个受信任的 SSH 主机。重置受信任的主机使 VVTerm 信任下一次连接时出现的主机密钥。";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm 为 %@ 保存了不同的 SSH 主机密钥。仅当您重新创建此服务器或信任新主机时才继续。";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm 将忘记该设备上所有保存的 SSH 主机指纹。与每个主机的下一次连接将信任它提供的密钥。";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm 将忘记保存的 SSH 主机密钥并重新连接。";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex 在此设备上有 %lld 受信任的 SSH 主机。重置受信任的主机使 Ghostex 信任下一次连接时出现的主机密钥。";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex 在此设备上有 1 个受信任的 SSH 主机。重置受信任的主机使 Ghostex 信任下一次连接时出现的主机密钥。";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex 为 %@ 保存了不同的 SSH 主机密钥。仅当您重新创建此服务器或信任新主机时才继续。";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex 将忘记该设备上所有保存的 SSH 主机指纹。与每个主机的下一次连接将信任它提供的密钥。";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex 将忘记保存的 SSH 主机密钥并重新连接。";
 "Welcome to Pro" = "欢迎使用 Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "如果没有 tmux，应用程序后台可能会中断正在运行的命令。";
 "Write" = "写";

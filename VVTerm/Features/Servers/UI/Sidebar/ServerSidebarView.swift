@@ -177,7 +177,7 @@ struct ServerSidebarView: View {
                 }
             }
 
-            // Support VVTerm (only when not Pro)
+            // Support Ghostex (only when not Pro)
             if !storeManager.isPro {
                 supportBanner
             }
@@ -748,7 +748,7 @@ struct ServerSidebarView: View {
                 Text(verbatim: "\u{2022}")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
-                Text("Support VVTerm")
+                Text("Support Ghostex")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

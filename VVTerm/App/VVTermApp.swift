@@ -189,7 +189,7 @@ struct VVTermCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("About VVTerm") {
+            Button("About Ghostex") {
                 AboutWindowController.shared.show()
             }
         }

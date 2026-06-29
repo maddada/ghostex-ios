@@ -909,7 +909,7 @@ extension PaywallSource {
         case .postFirstConnection:
             return String(localized: "You're connected")
         case .welcome:
-            return String(localized: "VVTerm Pro")
+            return String(localized: "Ghostex Pro")
         }
     }
 

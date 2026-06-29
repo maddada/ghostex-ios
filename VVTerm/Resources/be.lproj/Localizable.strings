@@ -14,7 +14,7 @@
 "Retry" = "Паўтарыць";
 "Upgrade" = "Абнавіць";
 "Upgrade to Pro" = "Абнавіць да Pro";
-"Upgrade to VVTerm Pro" = "Абнавіць да VVTerm Pro";
+"Upgrade to Ghostex Pro" = "Абнавіць да Ghostex Pro";
 "View Plans" = "Паглядзець планы";
 "Manage Subscription" = "Кіраванне падпіскай";
 "Manage subscription" = "Кіраванне падпіскай";
@@ -74,8 +74,8 @@
 "Copied" = "Скапіявана";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "Пра VVTerm";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "Пра Ghostex";
 "Version %@ (%@)" = "Версія %@ (%@)";
 "Professional SSH client\nfor macOS & iOS" = "Прафесійны SSH‑кліент\nдля macOS і iOS";
 "Visit Website" = "Наведаць сайт";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "Сардэчна запрашаем у VVTerm";
+"Welcome to Ghostex" = "Сардэчна запрашаем у Ghostex";
 "Your secure SSH terminal" = "Тэрмінал, файлы і жывая статыстыка сервера ў адным месцы.";
 "Continue" = "Працягнуць";
 "SSH Terminal" = "SSH‑тэрмінал";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "Інтэрвал: %lld с";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "Абнавіце да Pro для неабмежаваных функцый";
 "Unlimited Servers" = "Неабмежаваныя серверы";
 "Add as many servers as you need (free: 3)" = "Дадавайце столькі сервераў, колькі трэба (бясплатна: 3)";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "ПРАЦОЎНАЯ ПРАСТОРА";
 "SERVERS" = "СЕРВЕРЫ";
-"Support VVTerm" = "Падтрымаць VVTerm";
+"Support Ghostex" = "Падтрымаць Ghostex";
 "All" = "Усе";
 "Custom..." = "Карыстальніцкае...";
 "Unlock with Pro" = "Разблакаваць у Pro";
@@ -726,10 +726,10 @@
 "%lld windows" = "%lld вокнаў";
 "New session" = "Новая сесія";
 "Skip tmux" = "Прапусціць tmux";
-"Create VVTerm session" = "Стварыць сесію VVTerm";
+"Create Ghostex session" = "Стварыць сесію Ghostex";
 "Ask every time" = "Пытаць кожны раз";
 "Use remembered session" = "Выкарыстоўваць запомненую сесію";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "Для гэтага злучэння заўсёды ствараць або падключаць сесію tmux, якой кіруе VVTerm.";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "Для гэтага злучэння заўсёды ствараць або падключаць сесію tmux, якой кіруе Ghostex.";
 "Show a prompt on each new tab or split so you can choose a session." = "Паказваць запыт пры кожнай новай укладцы або падзеле, каб можна было выбраць сесію.";
 "Start a normal shell without tmux session persistence." = "Запускаць звычайную абалонку без захавання сесіі tmux.";
 "Automatically attach to the last tmux session you selected." = "Аўтаматычна падключацца да апошняй выбранай сесіі tmux.";
@@ -750,13 +750,13 @@
 "Set a device passcode before using biometric authentication." = "Перад выкарыстаннем біяметрычнай аўтэнтыфікацыі ўсталюйце код-пароль прылады.";
 "Biometric authentication is locked. Unlock the device and try again." = "Біяметрычная аўтэнтыфікацыя заблакаваная. Разблакіруйце прыладу і паспрабуйце яшчэ раз.";
 "Authentication failed." = "Аўтэнтыфікацыя не ўдалася.";
-"Enable %@ for VVTerm" = "Уключыць %@ для VVTerm";
-"Unlock VVTerm with %@" = "Разблакіраваць VVTerm з дапамогай %@";
+"Enable %@ for Ghostex" = "Уключыць %@ для Ghostex";
+"Unlock Ghostex with %@" = "Разблакіраваць Ghostex з дапамогай %@";
 "Unlock server %@" = "Разблакіраваць сервер %@";
 "Unlock with %@" = "Разблакіраваць з дапамогай %@";
-"VVTerm is locked" = "VVTerm заблакаваны";
+"Ghostex is locked" = "Ghostex заблакаваны";
 "Require %@ to open this server" = "Патрабаваць %@, каб адкрыць гэты сервер";
-"Require %@ to open VVTerm" = "Патрабаваць %@, каб адкрыць VVTerm";
+"Require %@ to open Ghostex" = "Патрабаваць %@, каб адкрыць Ghostex";
 "Lock when app goes to background" = "Блакіраваць, калі праграма пераходзіць у фон";
 "Privacy Mode" = "Рэжым прыватнасці";
 "Re-auth grace period" = "Перыяд адтэрміноўкі паўторнай аўтэнтыфікацыі";
@@ -1123,8 +1123,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "Бясплатны план дазваляе актыўнае падключэнне %lld. Адключыце іншы сервер або абнавіце.";
 "From" = "Ад";
 "Group" = "Група";
-"Help Improve VVTerm" = "Дапамажыце палепшыць VVTerm";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improve VVTerm дзеліцца ананімнай статыстыкай аб тым, якія функцыі выкарыстоўваюцца - ніколі не тое, што вы ўводзіце, вашы серверы або што-небудзь, што вас ідэнтыфікуе.";
+"Help Improve Ghostex" = "Дапамажыце палепшыць Ghostex";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improve Ghostex дзеліцца ананімнай статыстыкай аб тым, якія функцыі выкарыстоўваюцца - ніколі не тое, што вы ўводзіце, вашы серверы або што-небудзь, што вас ідэнтыфікуе.";
 "Hide Hidden Files" = "Схаваць схаваныя файлы";
 "Hide Sidebar" = "Схаваць бакавую панэль";
 "Hide search" = "Схаваць пошук";
@@ -1242,7 +1242,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro здымае ўсе абмежаванні на працоўныя прасторы, серверы і ўкладкі.";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro адкрывае неабмежаваную колькасць працоўных прастор, сервераў і злучэнняў.";
 "Processing" = "Апрацоўка";
-"Rate VVTerm" = "Ацаніце VVTerm";
+"Rate Ghostex" = "Ацаніце Ghostex";
 "Read" = "Прачытайце";
 "Reconnecting (attempt %lld)…" = "Паўторнае падключэнне (спроба %lld)…";
 "Reconnecting…" = "Паўторнае падключэнне…";
@@ -1382,11 +1382,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "Выкарыстанне рэзервовага SSH для гэтага сеансу (Mosh не падтрымліваецца дазволеным аддаленым асяроддзем).";
 "Using SSH fallback for this session (mosh-server is missing)." = "Выкарыстоўваецца рэзервовы SSH для гэтага сеансу (mosh-сервер адсутнічае).";
 "Using SSH fallback for this session." = "Выкарыстанне рэзервовага SSH для гэтага сеансу.";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm мае %lld давераных вузлоў SSH на гэтай прыладзе. Скід давераных хастоў прымушае VVTerm давяраць ключу хаста, прадстаўленаму пры наступным злучэнні.";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm мае 1 надзейны хост SSH на гэтай прыладзе. Скід давераных хастоў прымушае VVTerm давяраць ключу хаста, прадстаўленаму пры наступным злучэнні.";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm захаваў іншы ключ хаста SSH для %@. Працягвайце, толькі калі вы стварылі гэты сервер нанова або давяраеце новаму хосту.";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm забудзе ўсе захаваныя адбіткі пальцаў хаста SSH на гэтай прыладзе. Наступнае злучэнне з кожным хостам будзе давяраць ключу, які ён прадстаўляе.";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm забудзе захаваны ключ хаста SSH і паўторна падключыцца.";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex мае %lld давераных вузлоў SSH на гэтай прыладзе. Скід давераных хастоў прымушае Ghostex давяраць ключу хаста, прадстаўленаму пры наступным злучэнні.";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex мае 1 надзейны хост SSH на гэтай прыладзе. Скід давераных хастоў прымушае Ghostex давяраць ключу хаста, прадстаўленаму пры наступным злучэнні.";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex захаваў іншы ключ хаста SSH для %@. Працягвайце, толькі калі вы стварылі гэты сервер нанова або давяраеце новаму хосту.";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex забудзе ўсе захаваныя адбіткі пальцаў хаста SSH на гэтай прыладзе. Наступнае злучэнне з кожным хостам будзе давяраць ключу, які ён прадстаўляе.";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex забудзе захаваны ключ хаста SSH і паўторна падключыцца.";
 "Welcome to Pro" = "Вітаем у Pro";
 "Without tmux, app backgrounding can interrupt running commands." = "Без tmux фонавая праца праграмы можа перапыніць выкананне каманд.";
 "Write" = "Пішыце";

@@ -93,7 +93,7 @@ struct AboutSettingsView: View {
                         .cornerRadius(16)
                         .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
 
-                    Text("VVTerm")
+                    Text("Ghostex")
                         .font(.title)
                         .fontWeight(.bold)
 
@@ -115,7 +115,7 @@ struct AboutSettingsView: View {
 
             Section("Support") {
                 Link(destination: URL(string: "https://apps.apple.com/app/id6757482822?action=write-review")!) {
-                    Label("Rate VVTerm", systemImage: "star")
+                    Label("Rate Ghostex", systemImage: "star")
                 }
                 .tint(.primary)
                 .foregroundStyle(.primary)

@@ -56,7 +56,7 @@ final class LiveActivityManager {
         let newState = VVTermActivityAttributes.ContentState(status: status, activeCount: activeCount)
         if activity == nil {
             do {
-                let attributes = VVTermActivityAttributes(appName: "VVTerm")
+                let attributes = VVTermActivityAttributes(appName: "Ghostex")
                 activity = try Activity.request(attributes: attributes, contentState: newState, pushType: nil)
                 lastState = newState
             } catch {

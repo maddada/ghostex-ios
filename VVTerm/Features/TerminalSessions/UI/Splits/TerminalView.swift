@@ -455,7 +455,7 @@ struct TerminalPaneView: View {
     private var retrustHostConfirmationMessage: String {
         let endpoint = "\(server.host):\(server.port)"
         return String(
-            format: String(localized: "VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
+            format: String(localized: "Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host."),
             endpoint
         )
     }

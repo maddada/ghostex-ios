@@ -14,7 +14,7 @@
 "Retry" = "再試行";
 "Upgrade" = "アップグレード";
 "Upgrade to Pro" = "Proにアップグレード";
-"Upgrade to VVTerm Pro" = "VVTerm Proにアップグレード";
+"Upgrade to Ghostex Pro" = "Ghostex Proにアップグレード";
 "View Plans" = "プランを見る";
 "Manage Subscription" = "サブスクリプション管理";
 "Manage subscription" = "サブスクリプション管理";
@@ -74,8 +74,8 @@
 "Copied" = "コピーしました";
 
 /* App & About */
-"VVTerm" = "VVTerm";
-"About VVTerm" = "VVTermについて";
+"Ghostex" = "Ghostex";
+"About Ghostex" = "Ghostexについて";
 "Version %@ (%@)" = "バージョン %@（%@）";
 "Professional SSH client\nfor macOS & iOS" = "macOSとiOS向けの\nプロフェッショナルSSHクライアント";
 "Visit Website" = "Webサイトを見る";
@@ -87,7 +87,7 @@
 "Vivy Technologies Co., Limited" = "Vivy Technologies Co., Limited";
 
 /* Welcome */
-"Welcome to VVTerm" = "VVTermへようこそ";
+"Welcome to Ghostex" = "Ghostexへようこそ";
 "Your secure SSH terminal" = "ターミナル、ファイル、ライブサーバー統計をひとつに。";
 "Continue" = "続ける";
 "SSH Terminal" = "SSHターミナル";
@@ -153,7 +153,7 @@
 "Interval: %llds" = "間隔：%lld 秒";
 
 /* Pro / Store */
-"VVTerm Pro" = "VVTerm Pro";
+"Ghostex Pro" = "Ghostex Pro";
 "Upgrade for unlimited features" = "無制限の機能のためにアップグレード";
 "Unlimited Servers" = "無制限のサーバー";
 "Add as many servers as you need (free: 3)" = "必要な数のサーバーを追加（無料：3）";
@@ -266,7 +266,7 @@
 /* Sidebar / Lists */
 "WORKSPACE" = "ワークスペース";
 "SERVERS" = "サーバー";
-"Support VVTerm" = "VVTermを支援";
+"Support Ghostex" = "Ghostexを支援";
 "All" = "すべて";
 "Custom..." = "カスタム...";
 "Unlock with Pro" = "Proで解除";
@@ -725,10 +725,10 @@
 "%lld windows" = "%lld ウィンドウ";
 "New session" = "新しいセッション";
 "Skip tmux" = "tmuxをスキップ";
-"Create VVTerm session" = "VVTermセッションを作成";
+"Create Ghostex session" = "Ghostexセッションを作成";
 "Ask every time" = "毎回確認する";
 "Use remembered session" = "記憶したセッションを使用";
-"Always create or attach to a VVTerm-managed tmux session for this connection." = "この接続では、VVTerm が管理する tmux セッションを常に作成またはアタッチします。";
+"Always create or attach to a Ghostex-managed tmux session for this connection." = "この接続では、Ghostex が管理する tmux セッションを常に作成またはアタッチします。";
 "Show a prompt on each new tab or split so you can choose a session." = "新しいタブや分割を開くたびにプロンプトを表示し、セッションを選べるようにします。";
 "Start a normal shell without tmux session persistence." = "tmux のセッション保持を使わずに通常のシェルを開始します。";
 "Automatically attach to the last tmux session you selected." = "最後に選択した tmux セッションに自動でアタッチします。";
@@ -749,13 +749,13 @@
 "Set a device passcode before using biometric authentication." = "生体認証を使用する前にデバイスのパスコードを設定してください。";
 "Biometric authentication is locked. Unlock the device and try again." = "生体認証はロックされています。デバイスのロックを解除してもう一度お試しください。";
 "Authentication failed." = "認証に失敗しました。";
-"Enable %@ for VVTerm" = "VVTermで%@を有効にする";
-"Unlock VVTerm with %@" = "%@でVVTermをロック解除";
+"Enable %@ for Ghostex" = "Ghostexで%@を有効にする";
+"Unlock Ghostex with %@" = "%@でGhostexをロック解除";
 "Unlock server %@" = "サーバー%@をロック解除";
 "Unlock with %@" = "%@でロック解除";
-"VVTerm is locked" = "VVTermはロックされています";
+"Ghostex is locked" = "Ghostexはロックされています";
 "Require %@ to open this server" = "このサーバーを開くには%@が必要です";
-"Require %@ to open VVTerm" = "VVTermを開くには%@が必要です";
+"Require %@ to open Ghostex" = "Ghostexを開くには%@が必要です";
 "Lock when app goes to background" = "アプリがバックグラウンドに移行したらロックする";
 "Privacy Mode" = "プライバシーモード";
 "Re-auth grace period" = "再認証の猶予時間";
@@ -1122,8 +1122,8 @@
 "Free plan allows %lld active connection. Disconnect another server or upgrade." = "無料プランでは %lld アクティブ接続が可能です。別のサーバーを切断するか、アップグレードします。";
 "From" = "から";
 "Group" = "グループ";
-"Help Improve VVTerm" = "VVTerm の改善にご協力ください";
-"Help Improve VVTerm shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improvement VVTerm は、使用されている機能に関する匿名の統計を共有します。入力内容、サーバー、またはユーザーを特定するものは一切公開されません。";
+"Help Improve Ghostex" = "Ghostex の改善にご協力ください";
+"Help Improve Ghostex shares anonymous statistics about which features are used — never what you type, your servers, or anything that identifies you." = "Help Improvement Ghostex は、使用されている機能に関する匿名の統計を共有します。入力内容、サーバー、またはユーザーを特定するものは一切公開されません。";
 "Hide Hidden Files" = "隠しファイルを隠す";
 "Hide Sidebar" = "サイドバーを隠す";
 "Hide search" = "検索を非表示にする";
@@ -1241,7 +1241,7 @@
 "Pro removes every limit on workspaces, servers, and tabs." = "Pro では、ワークスペース、サーバー、タブのあらゆる制限が削除されます。";
 "Pro unlocks unlimited workspaces, servers, and connections." = "Pro は、無制限のワークスペース、サーバー、接続のロックを解除します。";
 "Processing" = "処理中";
-"Rate VVTerm" = "レート VVTerm";
+"Rate Ghostex" = "レート Ghostex";
 "Read" = "読む";
 "Reconnecting (attempt %lld)…" = "再接続中 (%lld を試行)…";
 "Reconnecting…" = "再接続中…";
@@ -1381,11 +1381,11 @@
 "Using SSH fallback for this session (Mosh is not supported by the resolved remote environment)." = "このセッションに SSH フォールバックを使用します (解決されたリモート環境では Mosh がサポートされていません)。";
 "Using SSH fallback for this session (mosh-server is missing)." = "このセッションに SSH フォールバックを使用します (mosh サーバーがありません)。";
 "Using SSH fallback for this session." = "このセッションでは SSH フォールバックを使用します。";
-"VVTerm has %lld trusted SSH hosts on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm には、このデバイス上に %lld の信頼された SSH ホストがあります。信頼できるホストをリセットすると、VVTerm は次回の接続で提示されたホスト キーを信頼するようになります。";
-"VVTerm has 1 trusted SSH host on this device. Resetting trusted hosts makes VVTerm trust the host key presented on the next connection." = "VVTerm には、このデバイス上に 1 つの信頼された SSH ホストがあります。信頼できるホストをリセットすると、VVTerm は次回の接続で提示されたホスト キーを信頼するようになります。";
-"VVTerm saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "VVTerm は、%@ の別の SSH ホスト キーを保存しました。このサーバーを再作成した場合、または新しいホストを信頼する場合にのみ続行してください。";
-"VVTerm will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "VVTerm は、このデバイスに保存されているすべての SSH ホスト フィンガープリントを忘れます。各ホストへの次回の接続では、ホストが提示するキーが信頼されます。";
-"VVTerm will forget the saved SSH host key and reconnect." = "VVTerm は保存された SSH ホスト キーを忘れて再接続します。";
+"Ghostex has %lld trusted SSH hosts on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex には、このデバイス上に %lld の信頼された SSH ホストがあります。信頼できるホストをリセットすると、Ghostex は次回の接続で提示されたホスト キーを信頼するようになります。";
+"Ghostex has 1 trusted SSH host on this device. Resetting trusted hosts makes Ghostex trust the host key presented on the next connection." = "Ghostex には、このデバイス上に 1 つの信頼された SSH ホストがあります。信頼できるホストをリセットすると、Ghostex は次回の接続で提示されたホスト キーを信頼するようになります。";
+"Ghostex saved a different SSH host key for %@. Only continue if you recreated this server or trust the new host." = "Ghostex は、%@ の別の SSH ホスト キーを保存しました。このサーバーを再作成した場合、または新しいホストを信頼する場合にのみ続行してください。";
+"Ghostex will forget all saved SSH host fingerprints on this device. The next connection to each host will trust the key it presents." = "Ghostex は、このデバイスに保存されているすべての SSH ホスト フィンガープリントを忘れます。各ホストへの次回の接続では、ホストが提示するキーが信頼されます。";
+"Ghostex will forget the saved SSH host key and reconnect." = "Ghostex は保存された SSH ホスト キーを忘れて再接続します。";
 "Welcome to Pro" = "プロへようこそ";
 "Without tmux, app backgrounding can interrupt running commands." = "tmux を使用しないと、アプリのバックグラウンド処理によって実行中のコマンドが中断される可能性があります。";
 "Write" = "書く";

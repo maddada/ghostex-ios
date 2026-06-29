@@ -7,6 +7,7 @@
 		<!-- CDXC:iOSBranding 2026-05-26-14:44: Device installs of the VVTerm-based fork should appear as Ghostex on iOS so testers can distinguish the migrated app from upstream VVTerm. -->
 		<key>CFBundleDisplayName</key>
 		<string>Ghostex</string>
+		<!-- CDXC:iOSAppIcon 2026-06-29-20:51: The Ghostex iOS icon artwork must fill the full app-icon canvas; do not ship a pre-padded rounded-square image with a baked black border because iOS applies the final icon mask itself. -->
 		<!-- CDXC:iOSDeviceInstall 2026-05-26-14:44: The locally signed Ghostex iOS fork does not carry Vivy's iCloud container entitlement. Disable CloudKit startup for this app identity instead of constructing an unavailable CKContainer and crashing on physical devices. -->
 		<key>GhostexCloudKitDisabled</key>
 		<true/>
@@ -63,15 +64,15 @@
 
     <!-- Microphone usage -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>VVTerm needs microphone access to transcribe voice commands to terminal input.</string>
+    <string>Ghostex needs microphone access to transcribe voice commands to terminal input.</string>
 
     <!-- Speech recognition -->
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>VVTerm uses speech recognition to convert voice to terminal commands.</string>
+    <string>Ghostex uses speech recognition to convert voice to terminal commands.</string>
 
     <!-- Face ID -->
     <key>NSFaceIDUsageDescription</key>
-    <string>VVTerm uses Face ID to unlock the app and protected servers.</string>
+    <string>Ghostex uses Face ID to unlock the app and protected servers.</string>
 
     <!-- Live Activities -->
     <key>NSSupportsLiveActivities</key>
@@ -85,7 +86,7 @@
 
     <!-- Local network usage -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>VVTerm uses your local network to connect to SSH servers on your LAN.</string>
+    <string>Ghostex uses your local network to connect to SSH servers on your LAN.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_ssh._tcp</string>
