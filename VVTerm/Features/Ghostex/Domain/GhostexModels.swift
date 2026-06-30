@@ -1,6 +1,6 @@
 import Foundation
 
-struct GhostexRemoteSession: Identifiable, Hashable {
+struct GhostexRemoteSession: Identifiable, Hashable, Sendable {
     let sessionId: String
     let alias: String
     let title: String
@@ -23,24 +23,12 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let providerSessionState: String
     let isLive: Bool
     let lastInteractionAt: String
+    let lastInteractionDate: Date?
+    let displayStatus: String
+    let displaySortPriority: Int
     let shouldSubmitStagedFirstPromptTitleCommand: Bool
 
     var id: String { sessionId }
-    var lastInteractionDate: Date? {
-        Self.date(from: lastInteractionAt)
-    }
-
-    var displayStatus: String {
-        if isSleeping && !isLive { return "sleep" }
-        let activityState = Self.normalizedSessionState(activity)
-        let statusState = Self.normalizedSessionState(status)
-        if Self.isActionableStatus(activityState) { return activityState }
-        if Self.isActionableStatus(statusState) { return statusState }
-        if !isLive, activityState == "sleep" || statusState == "sleep" { return "sleep" }
-        if !activityState.isEmpty, activityState != "running", !isLive || activityState != "sleep" { return activityState }
-        if !statusState.isEmpty, statusState != "running", !isLive || statusState != "sleep" { return statusState }
-        return "idle"
-    }
 
     static func parseList(from data: Data) throws -> [GhostexRemoteSession] {
         /*
@@ -145,28 +133,36 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         isLive = parsedIsLive
         isSleeping = legacySleeping && !parsedIsLive
         lastInteractionAt = Self.string(json["lastInteractionAt"])
+        lastInteractionDate = Self.date(from: lastInteractionAt)
+        displayStatus = Self.resolvedDisplayStatus(
+            isSleeping: legacySleeping && !parsedIsLive,
+            isLive: parsedIsLive,
+            activity: activity,
+            status: status
+        )
+        displaySortPriority = Self.sortPriority(forDisplayStatus: displayStatus)
         shouldSubmitStagedFirstPromptTitleCommand = (json["shouldSubmitStagedFirstPromptTitleCommand"] as? Bool) ?? false
     }
 
-    var isZmxBacked: Bool {
+    nonisolated var isZmxBacked: Bool {
         provider == "zmx"
     }
 
-    private static func string(_ value: Any?) -> String {
+    nonisolated private static func string(_ value: Any?) -> String {
         if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
         if let value = value as? NSNumber { return value.stringValue }
         return ""
     }
 
-    private static func firstNonEmpty(_ values: String...) -> String {
+    nonisolated private static func firstNonEmpty(_ values: String...) -> String {
         values.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private static func alias(from sessionId: String) -> String {
+    nonisolated private static func alias(from sessionId: String) -> String {
         String(sessionId.prefix(4))
     }
 
-    private static func date(from value: String) -> Date? {
+    nonisolated private static func date(from value: String) -> Date? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -189,11 +185,11 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         return Date(timeIntervalSince1970: timeInterval)
     }
 
-    private static func normalizedToken(_ value: String) -> String {
+    nonisolated private static func normalizedToken(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    private static func normalizedSessionState(_ value: String) -> String {
+    nonisolated private static func normalizedSessionState(_ value: String) -> String {
         let normalized = normalizedToken(value)
             .replacingOccurrences(of: "_", with: "-")
             .replacingOccurrences(of: " ", with: "-")
@@ -209,7 +205,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         }
     }
 
-    private static func normalizedNativePaneState(_ value: String, isSleeping: Bool, activity: String, status: String) -> String {
+    nonisolated private static func normalizedNativePaneState(_ value: String, isSleeping: Bool, activity: String, status: String) -> String {
         let normalized = normalizedToken(value)
             .replacingOccurrences(of: "_", with: "-")
             .replacingOccurrences(of: " ", with: "-")
@@ -219,7 +215,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         return defaultNativePaneState(isSleeping: isSleeping, activity: activity, status: status)
     }
 
-    private static func defaultNativePaneState(isSleeping: Bool, activity: String, status: String) -> String {
+    nonisolated private static func defaultNativePaneState(isSleeping: Bool, activity: String, status: String) -> String {
         if isSleeping { return "unmounted" }
         let activityState = normalizedSessionState(activity)
         let statusState = normalizedSessionState(status)
@@ -231,7 +227,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         return "unmounted"
     }
 
-    private static func normalizedProviderSessionState(_ value: String) -> String {
+    nonisolated private static func normalizedProviderSessionState(_ value: String) -> String {
         let normalized = normalizedToken(value)
             .replacingOccurrences(of: "_", with: "-")
             .replacingOccurrences(of: " ", with: "-")
@@ -245,7 +241,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         return "unknown"
     }
 
-    private static func derivedIsLive(nativePaneState: String, providerSessionState: String, isSleeping: Bool, activity: String, status: String) -> Bool {
+    nonisolated private static func derivedIsLive(nativePaneState: String, providerSessionState: String, isSleeping: Bool, activity: String, status: String) -> Bool {
         if nativePaneState == "mounted" || nativePaneState == "mounting" || providerSessionState == "exists" {
             return true
         }
@@ -262,15 +258,40 @@ struct GhostexRemoteSession: Identifiable, Hashable {
             activityState == "idle" || statusState == "idle"
     }
 
-    private static func isLiveActivityState(_ value: String) -> Bool {
+    nonisolated private static func isLiveActivityState(_ value: String) -> Bool {
         value == "working" || value == "attention"
     }
 
-    private static func isActionableStatus(_ value: String) -> Bool {
+    nonisolated private static func isActionableStatus(_ value: String) -> Bool {
         ["attention", "working", "done", "error"].contains(value)
     }
 
-    private static func sessionListJSONData(from data: Data) throws -> Data {
+    nonisolated private static func resolvedDisplayStatus(
+        isSleeping: Bool,
+        isLive: Bool,
+        activity: String,
+        status: String
+    ) -> String {
+        if isSleeping && !isLive { return "sleep" }
+        let activityState = normalizedSessionState(activity)
+        let statusState = normalizedSessionState(status)
+        if isActionableStatus(activityState) { return activityState }
+        if isActionableStatus(statusState) { return statusState }
+        if !isLive, activityState == "sleep" || statusState == "sleep" { return "sleep" }
+        if !activityState.isEmpty, activityState != "running", !isLive || activityState != "sleep" { return activityState }
+        if !statusState.isEmpty, statusState != "running", !isLive || statusState != "sleep" { return statusState }
+        return "idle"
+    }
+
+    nonisolated private static func sortPriority(forDisplayStatus status: String) -> Int {
+        switch status {
+        case "done": return 0
+        case "working": return 1
+        default: return 2
+        }
+    }
+
+    nonisolated fileprivate static func sessionListJSONData(from data: Data) throws -> Data {
         guard let text = String(data: data, encoding: .utf8) else { return data }
         var searchStart = text.startIndex
         var sawIncompleteObject = false
@@ -297,7 +318,7 @@ struct GhostexRemoteSession: Identifiable, Hashable {
         throw GhostexError(text.contains("{") ? "Ghostex CLI did not return a sessions JSON payload." : "Ghostex CLI did not return JSON.")
     }
 
-    private static func jsonObjectEnd(in text: String, startingAt start: String.Index) -> String.Index? {
+    nonisolated private static func jsonObjectEnd(in text: String, startingAt start: String.Index) -> String.Index? {
         var index = start
         var depth = 0
         var inString = false
@@ -328,21 +349,145 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     }
 }
 
-struct GhostexProjectGroup: Identifiable, Hashable {
+struct GhostexSessionListSnapshot: Hashable, Sendable {
+    static let empty = GhostexSessionListSnapshot(
+        revision: "",
+        sessions: [],
+        projectGroups: [],
+        fingerprint: ""
+    )
+
+    let revision: String
+    let sessions: [GhostexRemoteSession]
+    let projectGroups: [GhostexProjectGroup]
+    let fingerprint: String
+
+    nonisolated static func parse(from data: Data) throws -> GhostexSessionListSnapshot {
+        let jsonData = try GhostexRemoteSession.sessionListJSONData(from: data)
+        guard let root = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            throw GhostexError("Ghostex sessions output was not JSON.")
+        }
+        if let ok = root["ok"] as? Bool, !ok {
+            throw GhostexError((root["error"] as? String) ?? "Ghostex could not list sessions.")
+        }
+
+        let rawSessions = root["sessions"] as? [[String: Any]] ?? []
+        let sessions = rawSessions.compactMap(GhostexRemoteSession.init(json:)).filter(\.isZmxBacked)
+        let projectGroups = GhostexProjectGroup.groups(from: sessions)
+        return GhostexSessionListSnapshot(
+            revision: string(root["revision"] ?? root["snapshotRevision"] ?? root["requestId"]),
+            sessions: sessions,
+            projectGroups: projectGroups,
+            fingerprint: fingerprint(for: sessions)
+        )
+    }
+
+    nonisolated private static func string(_ value: Any?) -> String {
+        if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let value = value as? NSNumber { return value.stringValue }
+        return ""
+    }
+
+    nonisolated private static func fingerprint(for sessions: [GhostexRemoteSession]) -> String {
+        sessions.map { session in
+            [
+                session.sessionId,
+                session.projectId,
+                session.groupId,
+                session.projectName,
+                session.projectPath,
+                session.displayTitle,
+                session.title,
+                session.alias,
+                session.displayStatus,
+                session.agent,
+                session.agentIcon,
+                session.providerSessionName,
+                session.providerSessionState,
+                session.isFocused ? "1" : "0",
+                session.isLive ? "1" : "0",
+                session.isSleeping ? "1" : "0",
+                session.lastInteractionAt,
+                session.shouldSubmitStagedFirstPromptTitleCommand ? "1" : "0",
+            ].joined(separator: "\u{1F}")
+        }.joined(separator: "\u{1E}")
+    }
+}
+
+struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
     let key: String
     let projectId: String
     let groupId: String
     let name: String
     let path: String
     let sessions: [GhostexRemoteSession]
+    let workingCount: Int
+    let sleepingCount: Int
+    let attentionCount: Int
 
     var id: String { key }
-    var workingCount: Int { sessions.filter { $0.displayStatus != "sleep" }.count }
-    var sleepingCount: Int { sessions.filter { $0.displayStatus == "sleep" }.count }
-    var attentionCount: Int { sessions.filter { $0.displayStatus == "attention" }.count }
 
-    static func groups(from sessions: [GhostexRemoteSession]) -> [GhostexProjectGroup] {
-        var groups: [GhostexProjectGroup] = []
+    nonisolated init(
+        key: String,
+        projectId: String,
+        groupId: String,
+        name: String,
+        path: String,
+        sessions: [GhostexRemoteSession],
+        workingCount: Int? = nil,
+        sleepingCount: Int? = nil,
+        attentionCount: Int? = nil
+    ) {
+        self.key = key
+        self.projectId = projectId
+        self.groupId = groupId
+        self.name = name
+        self.path = path
+        self.sessions = sessions
+        self.workingCount = workingCount ?? sessions.filter { $0.displayStatus != "sleep" }.count
+        self.sleepingCount = sleepingCount ?? sessions.filter { $0.displayStatus == "sleep" }.count
+        self.attentionCount = attentionCount ?? sessions.filter { $0.displayStatus == "attention" }.count
+    }
+
+    nonisolated static func groups(from sessions: [GhostexRemoteSession]) -> [GhostexProjectGroup] {
+        struct Accumulator {
+            let key: String
+            let projectId: String
+            let groupId: String
+            let name: String
+            let path: String
+            var sessions: [GhostexRemoteSession]
+            var workingCount: Int
+            var sleepingCount: Int
+            var attentionCount: Int
+
+            init(session: GhostexRemoteSession, key: String) {
+                self.key = key
+                projectId = session.projectId
+                groupId = session.groupId
+                name = session.projectName
+                path = session.projectPath
+                sessions = []
+                workingCount = 0
+                sleepingCount = 0
+                attentionCount = 0
+                append(session)
+            }
+
+            mutating func append(_ session: GhostexRemoteSession) {
+                sessions.append(session)
+                if session.displayStatus == "sleep" {
+                    sleepingCount += 1
+                } else {
+                    workingCount += 1
+                }
+                if session.displayStatus == "attention" {
+                    attentionCount += 1
+                }
+            }
+        }
+
+        var groups: [Accumulator] = []
         var indexes: [String: Int] = [:]
 
         for session in sessions {
@@ -350,25 +495,10 @@ struct GhostexProjectGroup: Identifiable, Hashable {
                 ? (session.projectPath.isEmpty ? session.projectName : session.projectPath)
                 : session.projectId
             if let index = indexes[key] {
-                let existing = groups[index]
-                groups[index] = GhostexProjectGroup(
-                    key: existing.key,
-                    projectId: existing.projectId,
-                    groupId: existing.groupId,
-                    name: existing.name,
-                    path: existing.path,
-                    sessions: existing.sessions + [session]
-                )
+                groups[index].append(session)
             } else {
                 indexes[key] = groups.count
-                groups.append(GhostexProjectGroup(
-                    key: key,
-                    projectId: session.projectId,
-                    groupId: session.groupId,
-                    name: session.projectName,
-                    path: session.projectPath,
-                    sessions: [session]
-                ))
+                groups.append(Accumulator(session: session, key: key))
             }
         }
 
@@ -379,15 +509,18 @@ struct GhostexProjectGroup: Identifiable, Hashable {
                 groupId: group.groupId,
                 name: group.name,
                 path: group.path,
-                sessions: sortedSessionsForDisplay(group.sessions)
+                sessions: sortedSessionsForDisplay(group.sessions),
+                workingCount: group.workingCount,
+                sleepingCount: group.sleepingCount,
+                attentionCount: group.attentionCount
             )
         }
     }
 
-    private static func sortedSessionsForDisplay(_ sessions: [GhostexRemoteSession]) -> [GhostexRemoteSession] {
+    nonisolated private static func sortedSessionsForDisplay(_ sessions: [GhostexRemoteSession]) -> [GhostexRemoteSession] {
         sessions.sorted { lhs, rhs in
-            let lhsPriority = sortPriority(for: lhs)
-            let rhsPriority = sortPriority(for: rhs)
+            let lhsPriority = lhs.displaySortPriority
+            let rhsPriority = rhs.displaySortPriority
             if lhsPriority != rhsPriority {
                 return lhsPriority < rhsPriority
             }
@@ -408,14 +541,6 @@ struct GhostexProjectGroup: Identifiable, Hashable {
                 return titleComparison == .orderedAscending
             }
             return lhs.sessionId < rhs.sessionId
-        }
-    }
-
-    private static func sortPriority(for session: GhostexRemoteSession) -> Int {
-        switch session.displayStatus {
-        case "done": return 0
-        case "working": return 1
-        default: return 2
         }
     }
 }
@@ -469,7 +594,11 @@ enum GhostexZmxViewportRefresh {
 }
 
 enum GhostexRemoteCommand {
-    static let sessionsList = loginShellCommand("ghostex sessions --json")
+    /*
+    CDXC:iOSRemoteSessionsPerformance 2026-06-30-04:37:
+    iOS opens the sessions sheet over SSH, so large Mac inventories should request the CLI's mobile summary payload instead of transferring desktop-only presentation fields that the mobile sidebar never renders.
+    */
+    static let sessionsList = loginShellCommand("ghostex sessions --json --mobile-summary")
 
     static func attach(sessionId: String, projectId: String = "") -> String {
         /*
@@ -484,7 +613,16 @@ enum GhostexRemoteCommand {
     }
 
     static func attach(_ session: GhostexRemoteSession) -> String {
-        attach(sessionId: session.sessionId, projectId: session.projectId)
+        /*
+        CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
+        Mobile attach taps already receive the zmx provider session identity in the session list row. Use it directly for live zmx rows so opening a terminal does not run `ghostex attach --session-id`, which first performs a full inventory lookup and can add tens of seconds on large Mac hosts.
+        */
+        if session.isZmxBacked,
+           !session.providerSessionName.isEmpty,
+           session.providerSessionState == "exists" || session.isLive {
+            return loginShellCommand("exec zmx attach \(shellQuote(session.providerSessionName))")
+        }
+        return attach(sessionId: session.sessionId, projectId: session.projectId)
     }
 
     static func sessionAction(_ action: String, session: GhostexRemoteSession) -> String {

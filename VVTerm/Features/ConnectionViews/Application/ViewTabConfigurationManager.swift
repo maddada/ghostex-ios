@@ -22,6 +22,7 @@ final class ViewTabConfigurationManager: ObservableObject {
     private let showStatsKey = "showStatsTab"
     private let showTerminalKey = "showTerminalTab"
     private let showFilesKey = "showFilesTab"
+    private let showSessionsKey = "showSessionsTab"
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.vivy.vvterm", category: "ViewTabConfigurationManager")
 
     @Published private(set) var tabOrder: [ConnectionViewTab] = ConnectionViewTab.defaultOrder
@@ -29,6 +30,7 @@ final class ViewTabConfigurationManager: ObservableObject {
     @Published private(set) var showStatsTab: Bool = true
     @Published private(set) var showTerminalTab: Bool = true
     @Published private(set) var showFilesTab: Bool = true
+    @Published private(set) var showSessionsTab: Bool = true
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -81,11 +83,13 @@ final class ViewTabConfigurationManager: ObservableObject {
         showStatsTab = defaults.object(forKey: showStatsKey) as? Bool ?? true
         showTerminalTab = defaults.object(forKey: showTerminalKey) as? Bool ?? true
         showFilesTab = defaults.object(forKey: showFilesKey) as? Bool ?? true
+        showSessionsTab = defaults.object(forKey: showSessionsKey) as? Bool ?? true
 
         if currentVisibleTabs.isEmpty {
             showStatsTab = true
             showTerminalTab = true
             showFilesTab = true
+            showSessionsTab = true
         }
     }
 
@@ -109,6 +113,7 @@ final class ViewTabConfigurationManager: ObservableObject {
         defaults.set(showStatsTab, forKey: showStatsKey)
         defaults.set(showTerminalTab, forKey: showTerminalKey)
         defaults.set(showFilesTab, forKey: showFilesKey)
+        defaults.set(showSessionsTab, forKey: showSessionsKey)
         NotificationCenter.default.post(name: .viewTabConfigurationDidChange, object: nil)
     }
 
@@ -139,6 +144,8 @@ final class ViewTabConfigurationManager: ObservableObject {
             showTerminalTab = isVisible
         case ConnectionViewTab.files.id:
             showFilesTab = isVisible
+        case ConnectionViewTab.sessions.id:
+            showSessionsTab = isVisible
         default:
             return
         }
@@ -147,6 +154,7 @@ final class ViewTabConfigurationManager: ObservableObject {
             showStatsTab = true
             showTerminalTab = true
             showFilesTab = true
+            showSessionsTab = true
         }
 
         saveVisibility()
@@ -158,6 +166,7 @@ final class ViewTabConfigurationManager: ObservableObject {
         showStatsTab = true
         showTerminalTab = true
         showFilesTab = true
+        showSessionsTab = true
         saveTabOrder()
         saveDefaultTab()
         saveVisibility()
@@ -170,16 +179,17 @@ final class ViewTabConfigurationManager: ObservableObject {
 
     /// Returns the effective default tab
     func effectiveDefaultTab() -> String {
-        effectiveDefaultTab(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab)
+        effectiveDefaultTab(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab, showSessions: showSessionsTab)
     }
 
     /// Returns the effective default tab, accounting for visibility
-    func effectiveDefaultTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> String {
+    func effectiveDefaultTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true, showSessions: Bool = true) -> String {
         let isVisible: Bool
         switch defaultTab {
         case "stats": isVisible = showStats
         case "terminal": isVisible = showTerminal
         case "files": isVisible = showFiles
+        case "sessions": isVisible = showSessions
         default: isVisible = false
         }
 
@@ -188,16 +198,17 @@ final class ViewTabConfigurationManager: ObservableObject {
         }
 
         // Default tab is hidden, fall back to first visible
-        return firstVisibleTab(showStats: showStats, showTerminal: showTerminal, showFiles: showFiles)
+        return firstVisibleTab(showStats: showStats, showTerminal: showTerminal, showFiles: showFiles, showSessions: showSessions)
     }
 
     /// Returns the first visible tab from the configured order
-    func firstVisibleTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> String {
+    func firstVisibleTab(showStats: Bool, showTerminal: Bool, showFiles: Bool = true, showSessions: Bool = true) -> String {
         for tab in tabOrder {
             switch tab.id {
             case "stats" where showStats: return "stats"
             case "terminal" where showTerminal: return "terminal"
             case "files" where showFiles: return "files"
+            case "sessions" where showSessions: return "sessions"
             default: continue
             }
         }
@@ -205,19 +216,20 @@ final class ViewTabConfigurationManager: ObservableObject {
     }
 
     /// Returns only visible tabs in order
-    func visibleTabs(showStats: Bool, showTerminal: Bool, showFiles: Bool = true) -> [ConnectionViewTab] {
+    func visibleTabs(showStats: Bool, showTerminal: Bool, showFiles: Bool = true, showSessions: Bool = true) -> [ConnectionViewTab] {
         tabOrder.filter { tab in
             switch tab.id {
             case "stats": return showStats
             case "terminal": return showTerminal
             case "files": return showFiles
+            case "sessions": return showSessions
             default: return false
             }
         }
     }
 
     var currentVisibleTabs: [ConnectionViewTab] {
-        visibleTabs(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab)
+        visibleTabs(showStats: showStatsTab, showTerminal: showTerminalTab, showFiles: showFilesTab, showSessions: showSessionsTab)
     }
 
     func isTabVisible(_ tabId: String) -> Bool {
@@ -228,6 +240,8 @@ final class ViewTabConfigurationManager: ObservableObject {
             return showTerminalTab
         case ConnectionViewTab.files.id:
             return showFilesTab
+        case ConnectionViewTab.sessions.id:
+            return showSessionsTab
         default:
             return false
         }

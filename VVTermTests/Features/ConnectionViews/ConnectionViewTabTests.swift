@@ -6,6 +6,7 @@ final class ConnectionViewTabTests: XCTestCase {
         XCTAssertEqual(ConnectionViewTab.from(id: "stats"), .stats)
         XCTAssertEqual(ConnectionViewTab.from(id: "terminal"), .terminal)
         XCTAssertEqual(ConnectionViewTab.from(id: "files"), .files)
+        XCTAssertEqual(ConnectionViewTab.from(id: "sessions"), .sessions)
     }
 
     func testFromReturnsNilForUnknownTab() {

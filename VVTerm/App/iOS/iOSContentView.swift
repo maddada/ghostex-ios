@@ -105,6 +105,10 @@ struct iOSContentView: View {
         }
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
         .adaptiveSoftScrollEdges()
+        /*
+        CDXC:iOSCommercialCopy 2026-07-01-00:08:
+        Ghostex iOS should not show first-run or post-session paid upsell surfaces. Keep review prompting and unlocked entitlement behavior, but do not attach the upstream intro sheet to the root navigation stack.
+        */
         .onAppear {
             // Select first workspace on appear
             if selectedWorkspace == nil {
@@ -136,7 +140,6 @@ struct iOSContentView: View {
             }
         }
         .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
-        .proUpgradePresentation(isPresented: $engagementTracker.shouldShowProIntro, source: .postFirstConnection)
         .onChange(of: showingTerminal) { isShowing in
             if !isShowing {
                 engagementTracker.noteTerminalSessionEnded(
@@ -387,7 +390,7 @@ struct iOSServerListView: View {
         )
         .proFeatureAlert(
             title: String(localized: "Custom Environments"),
-            message: String(localized: "Upgrade to Pro for custom environments"),
+            message: String(localized: "Custom environments are unavailable in this build."),
             source: .customEnvironment,
             isPresented: $showingCustomEnvironmentAlert
         )
@@ -809,7 +812,6 @@ struct iOSTerminalView: View {
     @State private var currentServerId: UUID?
     @State private var pendingCloseSession: ConnectionSession?
     @State private var showingZenPanel = false
-    @State private var showingGhostexSidebar = false
     @State private var requestedTerminalDismissal = false
     @State private var voiceRecordingBySession: [UUID: Bool] = [:]
     @State private var pendingVoiceReturnBySession: [UUID: Bool] = [:]
@@ -964,14 +966,17 @@ struct iOSTerminalView: View {
         isConnecting || selectedServer != nil || !serverSessions.isEmpty
     }
 
+    private var canEnterZenMode: Bool {
+        selectedView != ConnectionViewTab.sessions.id && canUseZenMode
+    }
+
     private var effectiveZenModeEnabled: Bool {
-        isZenModeEnabled && canUseZenMode
+        isZenModeEnabled && canEnterZenMode
     }
 
     /*
-    CDXC:iOSUpstreamSync 2026-06-29-20:02:
-    Upstream hides the native view switcher when only one content tab is visible, but Ghostex keeps its Sessions entry point as the segmented control trailing action.
-    Keep the control visible when a server context exists so upstream chrome simplification does not remove Ghostex session access.
+    CDXC:iOSGhostexSessionsPage 2026-06-30-19:36:
+    Ghostex sessions should be a normal server page, like Stats, not a bottom drawer launched from the segmented-control trailing action. Keep the control visible when a server context exists so the Sessions tab remains reachable even if users hide other server views.
     */
     private var shouldShowViewSwitcher: Bool {
         viewTabConfig.currentVisibleTabs.count > 1 || (currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id) != nil
@@ -1159,6 +1164,10 @@ struct iOSTerminalView: View {
                 synchronizeRecoveredTerminalState()
             }
             .onChange(of: selectedView) { newValue in
+                if newValue == ConnectionViewTab.sessions.id {
+                    isZenModeEnabled = false
+                    showingZenPanel = false
+                }
                 if newValue != "terminal" {
                     clearPendingVoiceReturnForCurrentSession()
                     dismissKeyboardForCurrentSession()
@@ -1174,7 +1183,7 @@ struct iOSTerminalView: View {
                 attemptForegroundReconnectIfNeeded(refreshTerminal: true)
             }
             .onChange(of: isZenModeEnabled) { newValue in
-                if newValue && !canUseZenMode {
+                if newValue && !canEnterZenMode {
                     isZenModeEnabled = false
                     return
                 }
@@ -1246,21 +1255,6 @@ struct iOSTerminalView: View {
                 SettingsView()
                     .modifier(AppearanceModifier())
                     .adaptiveSoftScrollEdges()
-            }
-            .sheet(isPresented: $showingGhostexSidebar) {
-                /*
-                CDXC:iOSGhostexSidebar 2026-05-28-21:32:
-                The Ghostex sessions entry point belongs beside the terminal view switcher controls, after the Files segment, instead of on the server list. This keeps session attach/reuse available while a terminal is open and preserves the existing Ghostex sheet workflow.
-                */
-                GhostexSidebarSheet(
-                    serverManager: serverManager,
-                    sessionManager: sessionManager,
-                    store: ghostexStore,
-                    onOpenTerminal: {
-                        currentServerId = sessionManager.selectedSession?.serverId ?? currentServerId
-                    }
-                )
-                .modifier(AppearanceModifier())
             }
             .sheet(item: $serverToEdit) { server in
                 NavigationStack {
@@ -1341,10 +1335,26 @@ struct iOSTerminalView: View {
         }
     }
 
+    private var ghostexSessionsPage: some View {
+        GhostexSessionsView(
+            serverManager: serverManager,
+            sessionManager: sessionManager,
+            store: ghostexStore,
+            onOpenTerminal: {
+                currentServerId = sessionManager.selectedSession?.serverId ?? currentServerId ?? selectedServer?.id
+                if let serverId = currentServerId ?? selectedServer?.id ?? connectingServer?.id {
+                    sessionManager.selectedViewByServer[serverId] = ConnectionViewTab.terminal.id
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private var emptyStateContent: some View {
         if isConnecting, let serverName = (connectingServer ?? selectedServer)?.name {
             connectingStateView(serverName: serverName)
+        } else if selectedView == ConnectionViewTab.sessions.id {
+            ghostexSessionsPage
         } else if selectedView == "terminal" {
             TerminalEmptyStateView(server: selectedServer) {
                 openNewTab()
@@ -1411,6 +1421,11 @@ struct iOSTerminalView: View {
                 }
             }
 
+            if selectedView == ConnectionViewTab.sessions.id {
+                ghostexSessionsPage
+                    .zIndex(1)
+            }
+
             if selectedView == "terminal", let session = selectedSession ?? serverSessions.first {
                 sessionPage(session)
             }
@@ -1426,6 +1441,9 @@ struct iOSTerminalView: View {
     private var backgroundView: some View {
         if selectedView == "terminal" {
             terminalBackgroundColor
+                .ignoresSafeArea(.all)
+        } else if selectedView == ConnectionViewTab.sessions.id {
+            Color(UIColor.systemGroupedBackground)
                 .ignoresSafeArea(.all)
         } else {
             Color(UIColor.systemBackground)
@@ -1444,13 +1462,7 @@ struct iOSTerminalView: View {
                 if let serverId = currentServerId ?? selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id {
                     iOSNativeSegmentedPicker(
                         selection: selectedViewBinding(for: serverId),
-                        tabs: viewTabConfig.currentVisibleTabs,
-                        trailingActionSystemImage: "robot",
-                        trailingActionFallbackSystemImage: "cpu",
-                        trailingActionAccessibilityLabel: "Ghostex Sessions",
-                        onTrailingAction: {
-                            showingGhostexSidebar = true
-                        }
+                        tabs: viewTabConfig.currentVisibleTabs
                     )
                     .fixedSize()
                 }
@@ -1511,12 +1523,14 @@ struct iOSTerminalView: View {
                     }
                 }
 
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                        isZenModeEnabled = true
+                if canEnterZenMode {
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            isZenModeEnabled = true
+                        }
+                    } label: {
+                        Label("Zen Mode", systemImage: "arrow.up.left.and.arrow.down.right")
                     }
-                } label: {
-                    Label("Zen Mode", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
 
                 Button(role: .destructive) {
@@ -2240,12 +2254,22 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     var trailingActionAccessibilityLabel: String?
     var onTrailingAction: (() -> Void)?
 
+    /*
+    CDXC:iOSViewSwitcherSpacing 2026-06-30-21:09:
+    Sessions is the rightmost view-switcher button, so icon-only segments need a shared width. Without an explicit width, content-sized SF Symbols can leave the Sessions glyph with less right edge padding than Stats has on the left.
+
+    CDXC:iOSViewSwitcherSpacing 2026-07-01-00:08:
+    The chat-bubble Sessions symbol has wider intrinsic SF Symbol bounds than Stats and Terminal. Render every tab icon into the same centered canvas and give each segment a wider slot so left and right padding read evenly across the control.
+    */
+    private static let iconSegmentWidth: CGFloat = 54
+    private static let iconCanvasSize = CGSize(width: 34, height: 24)
+
     func makeUIView(context: Context) -> UISegmentedControl {
         let control = UISegmentedControl()
         configure(control, tabs: tabs, trailingActionSystemImage: trailingActionSystemImage, trailingActionFallbackSystemImage: trailingActionFallbackSystemImage)
         control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
         control.selectedSegmentIndex = selectedIndex
-        control.apportionsSegmentWidthsByContent = true
+        control.apportionsSegmentWidthsByContent = false
         control.setContentHuggingPriority(.required, for: .horizontal)
         control.setContentHuggingPriority(.required, for: .vertical)
         return control
@@ -2304,15 +2328,42 @@ private struct iOSNativeSegmentedPicker: UIViewRepresentable {
     ) {
         control.removeAllSegments()
         for (index, tab) in tabs.enumerated() {
-            control.insertSegment(with: UIImage(systemName: tab.icon), at: index, animated: false)
+            control.insertSegment(with: segmentImage(systemName: tab.icon), at: index, animated: false)
+            control.setWidth(Self.iconSegmentWidth, forSegmentAt: index)
         }
         if let trailingActionSystemImage {
-            let actionImage = UIImage(systemName: trailingActionSystemImage)
-                ?? trailingActionFallbackSystemImage.flatMap { UIImage(systemName: $0) }
+            let actionImage = segmentImage(systemName: trailingActionSystemImage)
+                ?? trailingActionFallbackSystemImage.flatMap { segmentImage(systemName: $0) }
             control.insertSegment(with: actionImage, at: tabs.count, animated: false)
-            control.setWidth(38, forSegmentAt: tabs.count)
+            control.setWidth(Self.iconSegmentWidth, forSegmentAt: tabs.count)
         }
         control.accessibilityLabel = (tabs.map(\.localizedKey) + [trailingActionAccessibilityLabel].compactMap { $0 }).joined(separator: ", ")
+    }
+
+    private func segmentImage(systemName: String) -> UIImage? {
+        guard let image = UIImage(systemName: systemName) else {
+            return nil
+        }
+
+        let configuration = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+        let configured = image.withConfiguration(configuration)
+        let renderer = UIGraphicsImageRenderer(size: Self.iconCanvasSize)
+
+        let rendered = renderer.image { _ in
+            let imageSize = configured.size
+            let drawSize = CGSize(
+                width: min(imageSize.width, Self.iconCanvasSize.width),
+                height: min(imageSize.height, Self.iconCanvasSize.height)
+            )
+            configured.draw(in: CGRect(
+                x: (Self.iconCanvasSize.width - drawSize.width) / 2,
+                y: (Self.iconCanvasSize.height - drawSize.height) / 2,
+                width: drawSize.width,
+                height: drawSize.height
+            ))
+        }
+
+        return rendered.withRenderingMode(.alwaysTemplate)
     }
 
     final class Coordinator: NSObject {

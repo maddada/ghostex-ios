@@ -22,9 +22,21 @@ final class ViewTabConfigurationManagerTests: XCTestCase {
         let manager = ViewTabConfigurationManager(defaults: makeDefaults())
         manager.setVisibility(for: ConnectionViewTab.terminal.id, isVisible: false)
         manager.setVisibility(for: ConnectionViewTab.files.id, isVisible: false)
+        manager.setVisibility(for: ConnectionViewTab.sessions.id, isVisible: false)
         manager.setVisibility(for: ConnectionViewTab.stats.id, isVisible: false)
 
         XCTAssertTrue(manager.showStatsTab)
         XCTAssertEqual(manager.currentVisibleTabs, [ConnectionViewTab.stats])
+    }
+
+    func testSessionsTabIsVisibleByDefault() {
+        /*
+        CDXC:iOSGhostexSessionsPage 2026-06-30-19:36:
+        The Ghostex sessions list is an in-place server view, so tab configuration must treat Sessions as a default visible view instead of an external sheet action.
+        */
+        let manager = ViewTabConfigurationManager(defaults: makeDefaults())
+
+        XCTAssertTrue(manager.showSessionsTab)
+        XCTAssertTrue(manager.currentVisibleTabs.contains(.sessions))
     }
 }

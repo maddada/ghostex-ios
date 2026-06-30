@@ -58,6 +58,38 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func sessionListSnapshotPrecomputesGroupsAndStableFingerprint() throws {
+        /*
+        CDXC:iOSRemoteSessionsPerformance 2026-06-30-04:37:
+        The iOS sidebar parses large remote inventories into a single snapshot before publishing SwiftUI state, with a mobile-row fingerprint so unchanged refreshes do not republish session/project arrays.
+        */
+        let output = """
+        shell notice
+        {"ok":true,"revision":"r1","sessions":[
+          {"sessionId":"idle-new","projectId":"p1","projectName":"App","status":"idle","provider":"zmx","displayTitle":"Idle","lastInteractionAt":"2026-06-30T10:00:00Z","displayTitleTooltip":"desktop-only"},
+          {"sessionId":"working-old","projectId":"p1","projectName":"App","status":"working","provider":"zmx","displayTitle":"Working","lastInteractionAt":"2026-06-28T10:00:00Z","actions":{"wake":false}},
+          {"sessionId":"done-old","projectId":"p1","projectName":"App","status":"done","provider":"zmx","displayTitle":"Done","lastInteractionAt":"2026-06-27T10:00:00Z"}
+        ]}
+        """
+
+        let snapshot = try GhostexSessionListSnapshot.parse(from: Data(output.utf8))
+
+        #expect(snapshot.revision == "r1")
+        #expect(snapshot.sessions.map(\.sessionId) == ["idle-new", "working-old", "done-old"])
+        #expect(snapshot.projectGroups.count == 1)
+        #expect(snapshot.projectGroups[0].sessions.map(\.sessionId) == ["done-old", "working-old", "idle-new"])
+        #expect(snapshot.projectGroups[0].workingCount == 3)
+
+        let sameMobileRows = output.replacingOccurrences(of: "desktop-only", with: "changed desktop-only")
+        let sameSnapshot = try GhostexSessionListSnapshot.parse(from: Data(sameMobileRows.utf8))
+        #expect(snapshot.fingerprint == sameSnapshot.fingerprint)
+
+        let changedMobileRow = output.replacingOccurrences(of: "\"displayTitle\":\"Idle\"", with: "\"displayTitle\":\"Idle changed\"")
+        let changedSnapshot = try GhostexSessionListSnapshot.parse(from: Data(changedMobileRow.utf8))
+        #expect(snapshot.fingerprint != changedSnapshot.fingerprint)
+    }
+
+    @Test
     func providerBackedSessionDoesNotUseLegacySleepingStatus() throws {
         /*
         CDXC:iOSGhostexSidebar 2026-05-29-09:20:
@@ -181,6 +213,13 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func sessionsListCommandRequestsMobileSummary() {
+        let command = GhostexRemoteCommand.sessionsList
+
+        #expect(command.contains("ghostex sessions --json --mobile-summary"))
+    }
+
+    @Test
     func createSessionCommandRequestsJson() {
         let project = GhostexProjectGroup(
             key: "p1",
@@ -242,6 +281,44 @@ struct GhostexSidebarTests {
             "projectId": "p1",
             "title": "Work",
             "provider": "zmx",
+        ])!
+
+        let command = GhostexRemoteCommand.attach(session)
+
+        #expect(command.contains("ghostex attach --session-id"))
+        #expect(command.contains("--project-id"))
+    }
+
+    @Test
+    func liveZmxAttachCommandUsesProviderSessionDirectly() {
+        /*
+        CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
+        A live zmx session row includes the provider session name, so iOS should attach directly to zmx and avoid the slower Ghostex CLI selector path that lists all sessions first.
+        */
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "title": "Work",
+            "provider": "zmx",
+            "providerSessionName": "gx-p1-s1",
+            "providerSessionState": "exists",
+        ])!
+
+        let command = GhostexRemoteCommand.attach(session)
+
+        #expect(command.contains("exec zmx attach"))
+        #expect(command.contains("gx-p1-s1"))
+        #expect(!command.contains("ghostex attach --session-id"))
+    }
+
+    @Test
+    func zmxAttachCommandFallsBackWithoutProviderSessionName() {
+        let session = GhostexRemoteSession(json: [
+            "sessionId": "s1",
+            "projectId": "p1",
+            "title": "Work",
+            "provider": "zmx",
+            "providerSessionState": "exists",
         ])!
 
         let command = GhostexRemoteCommand.attach(session)

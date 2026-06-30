@@ -40,7 +40,11 @@ enum WelcomeFeatureCatalog {
         WelcomeFeature(
             icon: "macbook.and.iphone",
             title: companionPlatformTitle,
-            description: "Ghostex is available on iPhone, iPad, and Mac. Pro purchases carry over with the same Apple ID.",
+            /*
+            CDXC:iOSCommercialCopy 2026-07-01-00:08:
+            Welcome feature copy should describe cross-device availability without mentioning paid purchases or upstream subscription language.
+            */
+            description: "Ghostex is available on iPhone, iPad, and Mac with the same app identity.",
             color: .blue
         ),
         WelcomeFeature(

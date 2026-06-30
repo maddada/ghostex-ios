@@ -99,7 +99,7 @@ struct iOSServerRow: View {
                 Button {
                     onLockedTap?()
                 } label: {
-                    Label("Unlock with Pro", systemImage: "lock.open.fill")
+                    Label("Unlock", systemImage: "lock.open.fill")
                 }
 
                 Button {
@@ -296,7 +296,7 @@ struct iOSWorkspacePickerView: View {
                         Button {
                             lockedWorkspaceAlert = workspace
                         } label: {
-                            Label("Unlock with Pro", systemImage: "lock.open.fill")
+                            Label("Unlock", systemImage: "lock.open.fill")
                         }
                         .tint(.orange)
                     } else {
@@ -330,7 +330,7 @@ struct iOSWorkspacePickerView: View {
                         Button {
                             lockedWorkspaceAlert = workspace
                         } label: {
-                            Label("Unlock with Pro", systemImage: "lock.open.fill")
+                            Label("Unlock", systemImage: "lock.open.fill")
                         }
                     } else {
                         Button {

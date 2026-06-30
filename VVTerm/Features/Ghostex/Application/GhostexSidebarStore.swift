@@ -10,6 +10,8 @@ final class GhostexSidebarStore: ObservableObject {
         didSet { persistSelectedServerId() }
     }
     @Published private(set) var sessions: [GhostexRemoteSession] = []
+    @Published private(set) var projectGroups: [GhostexProjectGroup] = []
+    @Published private(set) var collapsedProjectKeys: Set<String> = []
     @Published private(set) var isRefreshing = false
     @Published private(set) var isRunningAction = false
     @Published private(set) var lastError: String?
@@ -22,15 +24,22 @@ final class GhostexSidebarStore: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var submittedFirstPromptTitleCommandEnterKeys = Set<String>()
+    private var knownProjectKeys: Set<String> = []
+    private var lastSessionListFingerprint = ""
     /*
     CDXC:iOSGhostexSidebar 2026-06-12-09:48:
     Session refresh cancellation is expected when a new refresh, attach, or reuse action supersedes an in-flight list request. Track concurrent refreshes so a canceled older request cannot clear the spinner for a newer request, and keep cancellation out of user-facing errors.
+
+    CDXC:iOSRemoteSessionsPerformance 2026-06-30-04:37:
+    Large Mac session inventories must publish one precomputed list snapshot instead of deriving project groups from `sessions` during SwiftUI rendering. Keep project collapse state in this shared store for the current app run so reopening the sheet preserves expanded projects without persisting that state across app restarts. Background polls should not publish spinner/log churn when the mobile summary payload is unchanged.
+
+    CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
+    Attach taps must take priority over the expensive remote inventory command. Cancel visible/background refresh tasks before opening a terminal, and slow background polling after long refreshes so a 100+ session Mac does not continuously compete with user-initiated attaches.
     */
     private var activeRefreshCount = 0
-
-    var projectGroups: [GhostexProjectGroup] {
-        GhostexProjectGroup.groups(from: sessions)
-    }
+    private let regularPollDelaySeconds = 15
+    private let slowPollDelaySeconds = 60
+    private let slowPollThresholdSeconds: TimeInterval = 10
 
     private init() {
         if let raw = UserDefaults.standard.string(forKey: selectedServerKey) {
@@ -48,6 +57,8 @@ final class GhostexSidebarStore: ObservableObject {
     }
 
     func selectServer(_ server: Server) {
+        guard selectedServerId != server.id else { return }
+        resetRuntimeProjectCollapseState()
         selectedServerId = server.id
         appendLog("Selected Ghostex host \(server.displayAddress).")
     }
@@ -67,6 +78,7 @@ final class GhostexSidebarStore: ObservableObject {
         guard let server = selectedServer(from: serverManager.servers) else {
             throw GhostexError("Select a Ghostex host before attaching.")
         }
+        let shouldResumePollingOnFailure = suspendRefreshesForAttach()
 
         /*
         CDXC:iOSGhostexSidebar 2026-05-26-14:22:
@@ -78,40 +90,47 @@ final class GhostexSidebarStore: ObservableObject {
         CDXC:iOSGhostexSidebar 2026-05-28-20:59:
         ZMX-backed mobile attaches need the same delayed viewport refresh as Android sidebar and notification taps so the remote ZMX client repaints with the VVTerm grid after the tab becomes current.
         */
-        let startupCommand = GhostexRemoteCommand.attach(session)
-        if let existingSession = sessionManager.sessions.first(where: {
-            $0.serverId == server.id &&
-                $0.startupCommand == startupCommand &&
-                ($0.connectionState.isConnected || $0.connectionState.isConnecting)
-        }) {
-            appendLog("Reusing Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
-            sessionManager.selectedSessionId = existingSession.id
+        do {
+            let startupCommand = GhostexRemoteCommand.attach(session)
+            if let existingSession = sessionManager.sessions.first(where: {
+                $0.serverId == server.id &&
+                    $0.startupCommand == startupCommand &&
+                    ($0.connectionState.isConnected || $0.connectionState.isConnecting)
+            }) {
+                appendLog("Reusing Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
+                sessionManager.selectedSessionId = existingSession.id
+                sessionManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
+                scheduleViewportRefreshIfNeeded(
+                    for: session,
+                    localSessionId: existingSession.id,
+                    sessionManager: sessionManager,
+                    reason: "ghostex-warm-session-reuse"
+                )
+                return
+            }
+
+            appendLog("Opening Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
+            let attachSession = try await sessionManager.openConnection(
+                to: server,
+                forceNew: true,
+                startupCommand: startupCommand,
+                title: session.displayTitle,
+                skipTmuxLifecycle: true
+            )
+            sessionManager.selectedSessionId = attachSession.id
             sessionManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
             scheduleViewportRefreshIfNeeded(
                 for: session,
-                localSessionId: existingSession.id,
+                localSessionId: attachSession.id,
                 sessionManager: sessionManager,
-                reason: "ghostex-warm-session-reuse"
+                reason: "ghostex-new-ssh-attach"
             )
-            return
+        } catch {
+            if shouldResumePollingOnFailure {
+                startPolling(using: serverManager)
+            }
+            throw error
         }
-
-        appendLog("Opening Ghostex attach for \(session.sessionId) on \(server.displayAddress).")
-        let attachSession = try await sessionManager.openConnection(
-            to: server,
-            forceNew: true,
-            startupCommand: startupCommand,
-            title: session.displayTitle,
-            skipTmuxLifecycle: true
-        )
-        sessionManager.selectedSessionId = attachSession.id
-        sessionManager.selectedViewByServer[server.id] = ConnectionViewTab.terminal.id
-        scheduleViewportRefreshIfNeeded(
-            for: session,
-            localSessionId: attachSession.id,
-            sessionManager: sessionManager,
-            reason: "ghostex-new-ssh-attach"
-        )
     }
 
     func runSessionAction(
@@ -152,7 +171,9 @@ final class GhostexSidebarStore: ObservableObject {
         Creating a project session from mobile should match Android and macOS behavior: ask the Mac app to create the ZMX-backed terminal, refresh the sidebar inventory, then attach the new session immediately when the CLI returns a stable session id.
         */
         isRunningAction = true
-        lastError = nil
+        if lastError != nil {
+            lastError = nil
+        }
         appendLog("Running Ghostex action: create session in \(project.name).")
         do {
             let output = try await execute(GhostexRemoteCommand.createSession(project: project), on: server)
@@ -222,9 +243,17 @@ final class GhostexSidebarStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 if self?.selectedServer(from: serverManager.servers) != nil {
-                    await self?.loadSessions(using: serverManager)
+                    let startedAt = Date()
+                    await self?.loadSessions(using: serverManager, showsRefreshIndicator: false)
+                    guard !Task.isCancelled else { break }
+                    let elapsed = Date().timeIntervalSince(startedAt)
+                    let delaySeconds = elapsed >= (self?.slowPollThresholdSeconds ?? 10)
+                        ? (self?.slowPollDelaySeconds ?? 60)
+                        : (self?.regularPollDelaySeconds ?? 15)
+                    try? await Task.sleep(for: .seconds(delaySeconds))
+                } else {
+                    try? await Task.sleep(for: .seconds(self?.regularPollDelaySeconds ?? 15))
                 }
-                try? await Task.sleep(for: .seconds(5))
             }
         }
     }
@@ -234,29 +263,62 @@ final class GhostexSidebarStore: ObservableObject {
         pollTask = nil
     }
 
-    private func loadSessions(using serverManager: ServerManager) async {
+    func isProjectCollapsed(_ project: GhostexProjectGroup) -> Bool {
+        collapsedProjectKeys.contains(project.id)
+    }
+
+    func toggleProjectCollapse(_ project: GhostexProjectGroup) {
+        if collapsedProjectKeys.contains(project.id) {
+            collapsedProjectKeys.remove(project.id)
+        } else {
+            collapsedProjectKeys.insert(project.id)
+        }
+    }
+
+    private func loadSessions(using serverManager: ServerManager, showsRefreshIndicator: Bool = true) async {
         guard let server = selectedServer(from: serverManager.servers) else {
-            sessions = []
+            publishSnapshot(.empty)
             lastError = "Add or select a server to use as the Ghostex host."
             appendLog("Refresh skipped: no Ghostex host server is available.")
             return
         }
 
-        beginRefresh()
-        defer { endRefresh() }
-        lastError = nil
-        appendLog("Refreshing Ghostex sessions from \(server.displayAddress).")
+        if showsRefreshIndicator {
+            beginRefresh()
+        }
+        defer {
+            if showsRefreshIndicator {
+                endRefresh()
+            }
+        }
+        if lastError != nil {
+            lastError = nil
+        }
+        if showsRefreshIndicator {
+            appendLog("Refreshing Ghostex sessions from \(server.displayAddress).")
+        }
 
         do {
             let output = try await execute(GhostexRemoteCommand.sessionsList, on: server)
             guard !Task.isCancelled else { return }
-            let data = Data(output.utf8)
-            let parsed = try GhostexRemoteSession.parseList(from: data)
-            sessions = parsed
-            selectedServerId = server.id
-            appendLog("Refresh returned \(parsed.count) sessions.")
+            let snapshot = try await Task.detached(priority: .userInitiated) {
+                try GhostexSessionListSnapshot.parse(from: Data(output.utf8))
+            }.value
+            guard !Task.isCancelled else { return }
+            let isUnchanged = snapshot.fingerprint == lastSessionListFingerprint
+            if !isUnchanged {
+                publishSnapshot(snapshot)
+            }
+            if selectedServerId != server.id {
+                selectedServerId = server.id
+            }
+            if !isUnchanged {
+                appendLog("Refresh returned \(snapshot.sessions.count) sessions.")
+            } else if showsRefreshIndicator {
+                appendLog("Refresh returned unchanged session snapshot.")
+            }
             Task { [weak self] in
-                await self?.submitStagedFirstPromptTitleCommands(from: parsed, on: server)
+                await self?.submitStagedFirstPromptTitleCommands(from: snapshot.sessions, on: server)
             }
         } catch is CancellationError {
             return
@@ -267,6 +329,36 @@ final class GhostexSidebarStore: ObservableObject {
             lastError = message
             appendLog("Refresh failed: \(message)")
         }
+    }
+
+    private func publishSnapshot(_ snapshot: GhostexSessionListSnapshot) {
+        let currentProjectKeys = Set(snapshot.projectGroups.map(\.id))
+        var nextCollapsedProjectKeys = collapsedProjectKeys.intersection(currentProjectKeys)
+        nextCollapsedProjectKeys.formUnion(currentProjectKeys.subtracting(knownProjectKeys))
+        knownProjectKeys = currentProjectKeys
+        collapsedProjectKeys = nextCollapsedProjectKeys
+        sessions = snapshot.sessions
+        projectGroups = snapshot.projectGroups
+        lastSessionListFingerprint = snapshot.fingerprint
+    }
+
+    private func resetRuntimeProjectCollapseState() {
+        knownProjectKeys.removeAll()
+        collapsedProjectKeys.removeAll()
+        lastSessionListFingerprint = ""
+        sessions = []
+        projectGroups = []
+    }
+
+    private func suspendRefreshesForAttach() -> Bool {
+        let shouldResumePollingOnFailure = pollTask != nil
+        refreshTask?.cancel()
+        refreshTask = nil
+        pollTask?.cancel()
+        pollTask = nil
+        activeRefreshCount = 0
+        isRefreshing = false
+        return shouldResumePollingOnFailure
     }
 
     private func submitStagedFirstPromptTitleCommands(from parsed: [GhostexRemoteSession], on server: Server) async {

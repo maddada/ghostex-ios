@@ -40,106 +40,97 @@ private extension GhostexAgentIdentity {
     }
 }
 
-struct GhostexSidebarSheet: View {
+struct GhostexSessionsView: View {
     @ObservedObject var serverManager: ServerManager
     @ObservedObject var sessionManager: ConnectionSessionManager
     @ObservedObject var store: GhostexSidebarStore
     let onOpenTerminal: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var detailSession: GhostexRemoteSession?
     @State private var detailProject: GhostexProjectGroup?
     @State private var renamingSession: GhostexRemoteSession?
     @State private var renameTitle = ""
     @State private var showingLogs = false
-    @State private var collapsedProjectKeys: Set<String> = []
+    @State private var filterText = ""
 
     private var selectedServer: Server? {
         store.selectedServer(from: serverManager.servers)
     }
 
+    private var normalizedFilterText: String {
+        normalizedSearchText(filterText)
+    }
+
+    private var isFiltering: Bool {
+        !normalizedFilterText.isEmpty
+    }
+
+    private var displayedProjectGroups: [GhostexProjectGroup] {
+        guard isFiltering else { return store.projectGroups }
+        return store.projectGroups.compactMap { filteredProjectGroup($0, query: normalizedFilterText) }
+    }
+
     var body: some View {
-        NavigationStack {
-            List {
-                hostSection
-                sessionsSection
-                diagnosticsSection
+        List {
+            hostSection
+            filterSection
+            sessionsSection
+            runningActionSection
+        }
+        .listStyle(.insetGrouped)
+        .background(Color(UIColor.systemGroupedBackground))
+        .onAppear {
+            store.startPolling(using: serverManager)
+        }
+        .onDisappear {
+            store.stopPolling()
+        }
+        .refreshable {
+            store.refresh(using: serverManager)
+        }
+        .sheet(isPresented: $showingLogs) {
+            GhostexDiagnosticsView(logs: store.logs)
+        }
+        .alert("Ghostex", isPresented: Binding(
+            get: { store.lastError != nil },
+            set: { if !$0 { store.clearError() } }
+        )) {
+            Button("OK", role: .cancel) { store.clearError() }
+        } message: {
+            Text(store.lastError ?? "")
+        }
+        .alert("Rename Session", isPresented: Binding(
+            get: { renamingSession != nil },
+            set: { if !$0 { renamingSession = nil } }
+        )) {
+            TextField("Session title", text: $renameTitle)
+            Button("Cancel", role: .cancel) {
+                renamingSession = nil
+                renameTitle = ""
             }
-            .navigationTitle("Ghostex")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+            Button("Rename") {
+                if let renamingSession {
+                    store.renameSession(renamingSession, title: renameTitle, using: serverManager)
                 }
-
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        store.refresh(using: serverManager)
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .disabled(store.isRefreshing || selectedServer == nil)
-
-                    Button {
-                        showingLogs = true
-                    } label: {
-                        Image(systemName: "doc.text.magnifyingglass")
-                    }
-                }
+                renamingSession = nil
+                renameTitle = ""
             }
-            .onAppear {
-                store.startPolling(using: serverManager)
-            }
-            .onDisappear {
-                store.stopPolling()
-            }
-            .refreshable {
-                store.refresh(using: serverManager)
-            }
-            .sheet(isPresented: $showingLogs) {
-                GhostexDiagnosticsView(logs: store.logs)
-            }
-            .alert("Ghostex", isPresented: Binding(
-                get: { store.lastError != nil },
-                set: { if !$0 { store.clearError() } }
-            )) {
-                Button("OK", role: .cancel) { store.clearError() }
-            } message: {
-                Text(store.lastError ?? "")
-            }
-            .alert("Rename Session", isPresented: Binding(
-                get: { renamingSession != nil },
-                set: { if !$0 { renamingSession = nil } }
-            )) {
-                TextField("Session title", text: $renameTitle)
-                Button("Cancel", role: .cancel) {
-                    renamingSession = nil
-                    renameTitle = ""
-                }
-                Button("Rename") {
-                    if let renamingSession {
-                        store.renameSession(renamingSession, title: renameTitle, using: serverManager)
-                    }
-                    renamingSession = nil
-                    renameTitle = ""
-                }
-            } message: {
-                Text("Update this session title in Ghostex.")
-            }
-            .alert(item: $detailSession) { session in
-                Alert(
-                    title: Text(session.displayTitle),
-                    message: Text(sessionDetailText(session)),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-            .alert(item: $detailProject) { project in
-                Alert(
-                    title: Text(project.name),
-                    message: Text(projectDetailText(project)),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
+        } message: {
+            Text("Update this session title in Ghostex.")
+        }
+        .alert(item: $detailSession) { session in
+            Alert(
+                title: Text(session.displayTitle),
+                message: Text(sessionDetailText(session)),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(item: $detailProject) { project in
+            Alert(
+                title: Text(project.name),
+                message: Text(projectDetailText(project)),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
@@ -175,21 +166,33 @@ struct GhostexSidebarSheet: View {
                     Label(store.isRefreshing ? "Refreshing Sessions" : "Refresh Sessions", systemImage: "arrow.clockwise")
                 }
                 .disabled(store.isRefreshing)
+
+                Button {
+                    showingLogs = true
+                } label: {
+                    Label("Diagnostics", systemImage: "doc.text.magnifyingglass")
+                }
             }
         } header: {
             Text("Machine")
-        } footer: {
+        }
+    }
+
+    private var filterSection: some View {
+        Section {
             /*
-            CDXC:iOSRemoteSessions 2026-06-11-23:52:
-            iOS should describe the status path as SSH to the Mac plus gxserver-backed CLI inventory. The macOS app does not need to stay open for session statuses.
+            CDXC:iOSGhostexSessionsFilter 2026-07-01-00:08:
+            The sessions filter is a full-width grouped-list row, not small footer copy. Filtering must update continuously while the user types, keep keyboard focus across result changes, expand matching projects, and use strict fuzzy matching so short unrelated strings do not match.
             */
-            Text("Ghostex uses the selected Ghostex server and its Keychain credentials to run the Mac-hosted Ghostex CLI against GX server.")
+            GhostexSessionFilterBar(text: $filterText)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                .listRowBackground(Color.clear)
         }
     }
 
     @ViewBuilder
     private var sessionsSection: some View {
-        if store.projectGroups.isEmpty {
+        if displayedProjectGroups.isEmpty {
             Section("Sessions") {
                 if store.isRefreshing {
                     /*
@@ -202,7 +205,13 @@ struct GhostexSidebarSheet: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-                    .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .combine)
+                } else if isFiltering {
+                    GhostexEmptyState(
+                        title: "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: "No projects contain sessions matching this filter."
+                    )
                 } else {
                     GhostexEmptyState(
                         title: "No Sessions",
@@ -212,9 +221,9 @@ struct GhostexSidebarSheet: View {
                 }
             }
         } else {
-            ForEach(Array(store.projectGroups.enumerated()), id: \.element.id) { index, project in
+            ForEach(Array(displayedProjectGroups.enumerated()), id: \.element.id) { index, project in
                 Section {
-                    if !collapsedProjectKeys.contains(project.id) {
+                    if isFiltering || !store.isProjectCollapsed(project) {
                         ForEach(project.sessions) { session in
                             GhostexSessionRow(session: session)
                                 .contentShape(Rectangle())
@@ -229,10 +238,14 @@ struct GhostexSidebarSheet: View {
                 } header: {
                     GhostexProjectHeader(
                         project: project,
-                        isCollapsed: collapsedProjectKeys.contains(project.id),
+                        isCollapsed: !isFiltering && store.isProjectCollapsed(project),
                         canMoveUp: index > 0,
-                        canMoveDown: index < store.projectGroups.count - 1,
-                        onToggleCollapse: { toggleProjectCollapse(project) },
+                        canMoveDown: index < displayedProjectGroups.count - 1,
+                        onToggleCollapse: {
+                            if !isFiltering {
+                                store.toggleProjectCollapse(project)
+                            }
+                        },
                         onCreate: { createAndAttachSession(in: project) },
                         onRefresh: { store.refresh(using: serverManager) },
                         onMoveUp: { store.moveProject(project, direction: "up", using: serverManager) },
@@ -248,23 +261,10 @@ struct GhostexSidebarSheet: View {
         }
     }
 
-    private func toggleProjectCollapse(_ project: GhostexProjectGroup) {
-        if collapsedProjectKeys.contains(project.id) {
-            collapsedProjectKeys.remove(project.id)
-        } else {
-            collapsedProjectKeys.insert(project.id)
-        }
-    }
-
-    private var diagnosticsSection: some View {
-        Section {
-            Button {
-                showingLogs = true
-            } label: {
-                Label("Diagnostics", systemImage: "doc.text.magnifyingglass")
-            }
-
-            if store.isRunningAction {
+    @ViewBuilder
+    private var runningActionSection: some View {
+        if store.isRunningAction {
+            Section {
                 ProgressView("Running action")
             }
         }
@@ -328,7 +328,6 @@ struct GhostexSidebarSheet: View {
         Task {
             do {
                 try await store.attach(session, using: serverManager, sessionManager: sessionManager)
-                dismiss()
                 onOpenTerminal()
             } catch {
                 store.reportError(error)
@@ -340,7 +339,6 @@ struct GhostexSidebarSheet: View {
         Task {
             do {
                 try await store.createSession(in: project, using: serverManager, sessionManager: sessionManager)
-                dismiss()
                 onOpenTerminal()
             } catch {
                 store.reportError(error)
@@ -370,6 +368,175 @@ struct GhostexSidebarSheet: View {
             "Attention: \(project.attentionCount)",
             "Sleeping: \(project.sleepingCount)",
         ].joined(separator: "\n")
+    }
+
+    private func filteredProjectGroup(_ project: GhostexProjectGroup, query: String) -> GhostexProjectGroup? {
+        /*
+        CDXC:iOSGhostexSessionsFilter 2026-07-01-00:08:
+        Filters now run as users type instead of waiting for four characters. Project metadata matches still show every session in that project; otherwise fuzzy row matching keeps results helpful without turning the filter into broad substring noise.
+        */
+        let projectMatches = contains(query, in: [
+            project.name,
+            project.path,
+            project.projectId,
+            project.groupId,
+        ])
+        let filteredSessions = projectMatches
+            ? project.sessions
+            : project.sessions.filter { matches($0, query: query) }
+        guard !filteredSessions.isEmpty else { return nil }
+        return GhostexProjectGroup(
+            key: project.key,
+            projectId: project.projectId,
+            groupId: project.groupId,
+            name: project.name,
+            path: project.path,
+            sessions: filteredSessions
+        )
+    }
+
+    private func matches(_ session: GhostexRemoteSession, query: String) -> Bool {
+        contains(query, in: [
+            session.displayTitle,
+            session.title,
+            session.alias,
+            session.projectName,
+            session.projectPath,
+            session.displayStatus,
+            session.status,
+            session.activity,
+            session.agent,
+            session.agentIcon,
+            session.providerSessionName,
+            session.sessionId,
+        ])
+    }
+
+    private func contains(_ query: String, in values: [String]) -> Bool {
+        let normalizedQuery = normalizedSearchText(query)
+        let tokens = normalizedQuery.split(separator: " ").map(String.init)
+        guard !tokens.isEmpty else { return false }
+
+        let haystack = normalizedSearchText(values.joined(separator: " "))
+        guard !haystack.isEmpty else { return false }
+
+        return tokens.allSatisfy { token in
+            tokenMatches(token, in: haystack)
+        }
+    }
+
+    private func normalizedSearchText(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    private func tokenMatches(_ token: String, in haystack: String) -> Bool {
+        if haystack.contains(token) {
+            return true
+        }
+
+        guard token.count >= 3 else {
+            return false
+        }
+
+        let words = haystack.split(separator: " ").map(String.init)
+        if words.contains(where: { fuzzyOrderedMatch(token, in: $0) }) {
+            return true
+        }
+
+        guard token.count >= 4 else {
+            return false
+        }
+
+        return fuzzyOrderedMatch(token, in: haystack.replacingOccurrences(of: " ", with: ""))
+    }
+
+    private func fuzzyOrderedMatch(_ token: String, in candidate: String) -> Bool {
+        guard token.count >= 3, candidate.count >= token.count else {
+            return false
+        }
+
+        let maxSingleGap = max(2, token.count)
+        let maxTotalGap = max(3, token.count * 2)
+        var searchStart = candidate.startIndex
+        var previousMatch: String.Index?
+        var totalGap = 0
+
+        for character in token {
+            guard let match = candidate[searchStart...].firstIndex(of: character) else {
+                return false
+            }
+
+            if let previousMatch {
+                let gap = candidate.distance(from: candidate.index(after: previousMatch), to: match)
+                guard gap <= maxSingleGap else {
+                    return false
+                }
+                totalGap += gap
+            }
+
+            guard totalGap <= maxTotalGap else {
+                return false
+            }
+
+            previousMatch = match
+            searchStart = candidate.index(after: match)
+        }
+
+        return true
+    }
+}
+
+private struct GhostexSessionFilterBar: View {
+    @Binding var text: String
+    @FocusState private var isFieldFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 17, weight: .medium))
+
+            TextField("Filter sessions", text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .focused($isFieldFocused)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Clear filter")
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .center)
+        .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
+        .onChange(of: text) { newValue in
+            guard !newValue.isEmpty else { return }
+            DispatchQueue.main.async {
+                isFieldFocused = true
+            }
+        }
+        .textCase(nil)
     }
 }
 

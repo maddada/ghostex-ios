@@ -22,12 +22,14 @@ struct WelcomeView: View {
 #if os(iOS)
 private struct iOSWelcomeContent: View {
     @Binding var hasSeenWelcome: Bool
-    @State private var showingProUpgrade = false
 
     var body: some View {
         /*
         CDXC:iOSBranding 2026-06-29-22:21:
         User-facing iOS copy must call the app Ghostex with a capital G, even though upstream types, bundle internals, and imported VVTerm code keep their original names.
+
+        CDXC:iOSCommercialCopy 2026-07-01-00:08:
+        First-run onboarding must not mention paid tiers or link to upstream paywall surfaces. Ghostex's welcome screen should complete directly after the primary Continue action.
         */
         VStack(spacing: 0) {
             ScrollView {
@@ -110,20 +112,10 @@ private struct iOSWelcomeContent: View {
                                 .fill(Color.accentColor)
                         )
                 }
-
-                Button {
-                    showingProUpgrade = true
-                } label: {
-                    Text("Explore Pro")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
             .padding(.top, 8)
-            .proUpgradePresentation(isPresented: $showingProUpgrade, source: .welcome)
         }
     }
 }
@@ -134,7 +126,6 @@ private struct iOSWelcomeContent: View {
 #if os(macOS)
 private struct macOSWelcomeContent: View {
     @Binding var hasSeenWelcome: Bool
-    @State private var showingProUpgrade = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -204,6 +195,10 @@ private struct macOSWelcomeContent: View {
 
             // Continue button
             VStack(spacing: 12) {
+                /*
+                CDXC:iOSCommercialCopy 2026-07-01-00:08:
+                Keep shared welcome onboarding free of paid-tier links so the Ghostex fork does not surface upstream commercial copy in first-run flows.
+                */
                 Button {
                     hasSeenWelcome = true
                     AnalyticsTracker.shared.trackWelcomeCompleted()
@@ -216,19 +211,9 @@ private struct macOSWelcomeContent: View {
                 .buttonBorderShapeCompat()
                 .tint(Color(red: 1.0, green: 0.27, blue: 0.35))
                 .controlSize(.large)
-
-                Button {
-                    showingProUpgrade = true
-                } label: {
-                    Text("Explore Pro")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 48)
             .padding(.bottom, 28)
-            .proUpgradePresentation(isPresented: $showingProUpgrade, source: .welcome)
         }
         .frame(minWidth: 520, minHeight: 560)
         .background(Color(nsColor: .windowBackgroundColor))
