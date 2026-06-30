@@ -187,14 +187,13 @@ struct ZenModeChoiceChip: View {
     let title: LocalizedStringKey
     let systemImage: String
     let isSelected: Bool
+    var showsTitle = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
+            label
                 .font(.callout.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
                 .foregroundStyle(foregroundColor)
                 .background(
                     Capsule(style: .continuous)
@@ -202,6 +201,20 @@ struct ZenModeChoiceChip: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        if showsTitle {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+        } else {
+            Image(systemName: systemImage)
+                .imageScale(.large)
+                .frame(width: 48, height: 44)
+        }
     }
 
     private var foregroundColor: Color {
@@ -636,10 +649,15 @@ struct IOSZenModePanel: View {
             ZenModeSection("View") {
                 HStack(spacing: 8) {
                     ForEach(viewTabs) { tab in
+                        /*
+                        CDXC:iOSZenViewChips 2026-07-01-03:12:
+                        iOS Zen mode view bubbles must be icon-only so the compact overlay does not wrap tab labels over terminal content. Keep the localized view name as the accessibility label even when the visible text is hidden.
+                        */
                         ZenModeChoiceChip(
                             title: LocalizedStringKey(tab.localizedKey),
                             systemImage: tab.icon,
-                            isSelected: selectedView == tab.id
+                            isSelected: selectedView == tab.id,
+                            showsTitle: false
                         ) {
                             selectedViewBinding.wrappedValue = tab.id
                         }

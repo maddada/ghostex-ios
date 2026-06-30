@@ -2043,14 +2043,18 @@ class GhosttyTerminalView: UIView {
 
     // MARK: - Scroll Gesture
 
-    /// Scroll speed multiplier for iOS touch scrolling
-    private static let scrollMultiplier: Double = 1.5
+    /*
+    CDXC:iOSTerminalScroll 2026-07-01-03:12:
+    iOS terminal touch scrolling must be much faster than the previous conservative pan mapping. Use stronger direct deltas and carry that speed into flick momentum so users can move through scrollback without repeated slow swipes.
+    */
+    private static let scrollMultiplier: Double = 4.0
+    private static let momentumVelocityScale: Double = 0.75
 
-    /// Momentum deceleration rate (0.0-1.0, higher = slower deceleration)
-    private static let momentumDeceleration: Double = 0.92
+    /// Momentum deceleration rate (0.0-1.0, higher = longer momentum)
+    private static let momentumDeceleration: Double = 0.94
 
     /// Minimum velocity to trigger momentum scrolling
-    private static let minimumMomentumVelocity: Double = 50.0
+    private static let minimumMomentumVelocity: Double = 35.0
 
     /// Display link for momentum animation
     private var momentumDisplayLink: CADisplayLink?
@@ -2080,7 +2084,7 @@ class GhosttyTerminalView: UIView {
             // Update mouse position so TUI apps receive wheel events with coordinates.
             let pos = ghosttyPoint(location)
             surface.sendMousePos(.init(x: pos.x, y: pos.y, mods: []))
-            // Send scroll delta directly with increased multiplier for snappy feel
+            // Send scroll delta directly; the constants above own touch-scroll speed.
             let scrollEvent = Ghostty.Input.MouseScrollEvent(
                 x: Double(translation.x) * Self.scrollMultiplier,
                 y: Double(translation.y) * Self.scrollMultiplier,
@@ -2113,8 +2117,8 @@ class GhosttyTerminalView: UIView {
 
         // Scale velocity for momentum (divide by 60 for per-frame amount at 60fps)
         momentumVelocity = CGPoint(
-            x: velocity.x / 60.0 * Self.scrollMultiplier * 0.5,
-            y: velocity.y / 60.0 * Self.scrollMultiplier * 0.5
+            x: velocity.x / 60.0 * Self.scrollMultiplier * Self.momentumVelocityScale,
+            y: velocity.y / 60.0 * Self.scrollMultiplier * Self.momentumVelocityScale
         )
 
         // Create display link for smooth animation
