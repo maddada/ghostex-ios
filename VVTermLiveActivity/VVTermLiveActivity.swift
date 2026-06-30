@@ -13,7 +13,11 @@ struct VVTermLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 8) {
                         AppIconView(size: 20)
-                        Text(String(localized: "VVTerm"))
+                        /*
+                        CDXC:iOSNotificationBranding 2026-06-30-04:37:
+                        Live Activity copy must use the Ghostex appName supplied by the host app instead of localizing the upstream VVTerm product name.
+                        */
+                        Text(context.attributes.appName)
                             .font(.headline)
                         StatusDot(status: context.state.status)
                     }
@@ -52,7 +56,7 @@ private struct VVTermLiveActivityLockScreenView: View {
             AppIconView(size: 32)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(String(localized: "VVTerm"))
+                    Text(context.attributes.appName)
                         .font(.headline)
                     StatusDot(status: context.state.status)
                 }

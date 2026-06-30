@@ -52,6 +52,7 @@ struct GhostexSidebarSheet: View {
     @State private var renamingSession: GhostexRemoteSession?
     @State private var renameTitle = ""
     @State private var showingLogs = false
+    @State private var collapsedProjectKeys: Set<String> = []
 
     private var selectedServer: Server? {
         store.selectedServer(from: serverManager.servers)
@@ -191,7 +192,17 @@ struct GhostexSidebarSheet: View {
         if store.projectGroups.isEmpty {
             Section("Sessions") {
                 if store.isRefreshing {
-                    ProgressView("Loading sessions")
+                    /*
+                    CDXC:iOSRemoteSessions 2026-06-30-04:37:
+                    The empty sessions loading state should read as one centered row inside the grouped list card instead of leaving the spinner and label left-biased by the default ProgressView label layout.
+                    */
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading sessions")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+                    .accessibilityElement(children: .combine)
                 } else {
                     GhostexEmptyState(
                         title: "No Sessions",
@@ -203,21 +214,25 @@ struct GhostexSidebarSheet: View {
         } else {
             ForEach(Array(store.projectGroups.enumerated()), id: \.element.id) { index, project in
                 Section {
-                    ForEach(project.sessions) { session in
-                        GhostexSessionRow(session: session)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                attach(session)
+                    if !collapsedProjectKeys.contains(project.id) {
+                        ForEach(project.sessions) { session in
+                            GhostexSessionRow(session: session)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    attach(session)
+                                }
+                                .contextMenu {
+                                    sessionMenu(session)
+                                }
                             }
-                            .contextMenu {
-                                sessionMenu(session)
-                            }
-                    }
+                        }
                 } header: {
                     GhostexProjectHeader(
                         project: project,
+                        isCollapsed: collapsedProjectKeys.contains(project.id),
                         canMoveUp: index > 0,
                         canMoveDown: index < store.projectGroups.count - 1,
+                        onToggleCollapse: { toggleProjectCollapse(project) },
                         onCreate: { createAndAttachSession(in: project) },
                         onRefresh: { store.refresh(using: serverManager) },
                         onMoveUp: { store.moveProject(project, direction: "up", using: serverManager) },
@@ -230,6 +245,14 @@ struct GhostexSidebarSheet: View {
                     )
                 }
             }
+        }
+    }
+
+    private func toggleProjectCollapse(_ project: GhostexProjectGroup) {
+        if collapsedProjectKeys.contains(project.id) {
+            collapsedProjectKeys.remove(project.id)
+        } else {
+            collapsedProjectKeys.insert(project.id)
         }
     }
 
@@ -436,8 +459,10 @@ private struct GhostexAgentIconView: View {
 
 private struct GhostexProjectHeader: View {
     let project: GhostexProjectGroup
+    let isCollapsed: Bool
     let canMoveUp: Bool
     let canMoveDown: Bool
+    let onToggleCollapse: () -> Void
     let onCreate: () -> Void
     let onRefresh: () -> Void
     let onMoveUp: () -> Void
@@ -450,13 +475,23 @@ private struct GhostexProjectHeader: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                    .font(.subheadline.weight(.bold))
-                Text("\(project.sessions.count) sessions")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            Button(action: onToggleCollapse) {
+                HStack(spacing: 6) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 12)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(project.name)
+                            .font(.subheadline.weight(.bold))
+                        Text("\(project.sessions.count) sessions")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
+            .buttonStyle(.plain)
 
             Spacer()
 

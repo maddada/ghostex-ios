@@ -86,6 +86,9 @@ struct SettingsView: View {
             /*
             CDXC:iOSSettingsBranding 2026-06-29-22:21:
             Ghostex iOS settings must not surface upstream VVTerm branding or the commercial/about entry points requested for removal. Keep the Pro and About rows out of the iPhone settings navigation while shared/internal VVTerm symbols remain unchanged.
+
+            CDXC:iOSSettingsCredits 2026-06-30-04:37:
+            Settings needs a bottom Credits entry that clearly gives full credit to the upstream VVTerm project and recommends supporting Vivy through VVTerm Premium or GitHub Sponsors.
             */
             List {
                 Section {
@@ -132,6 +135,17 @@ struct SettingsView: View {
                             .adaptiveSoftScrollEdges()
                     } label: {
                         Label("Sync", systemImage: "icloud")
+                    }
+                }
+
+                Section {
+                    NavigationLink {
+                        GhostexCreditsView()
+                            .navigationTitle("Credits")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .adaptiveSoftScrollEdges()
+                    } label: {
+                        Label("Credits", systemImage: "heart")
                     }
                 }
             }
@@ -249,6 +263,45 @@ struct SettingsView: View {
             .tag(tag)
     }
     #endif
+}
+
+private struct GhostexCreditsView: View {
+    private let vvtermRepositoryURL = URL(string: "https://github.com/vivy-company/vvterm/")!
+    private let vvtermAppStoreURL = URL(string: "https://apps.apple.com/app/vvterm/id6757482822")!
+    private let vivySponsorURL = URL(string: "https://github.com/sponsors/vivy-company")!
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("VVTerm")
+                        .font(.title2.weight(.semibold))
+
+                    Text("Full credit for this app goes to the VVTerm project by vivy-company.")
+                        .font(.body)
+
+                    Text("Ghostex Mobile is built from VVTerm. Please support the original work by buying VVTerm Premium or sponsoring vivy-company on GitHub.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+            }
+
+            Section("Support VVTerm") {
+                Link(destination: vvtermRepositoryURL) {
+                    Label("Open VVTerm on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+
+                Link(destination: vvtermAppStoreURL) {
+                    Label("Get VVTerm Premium", systemImage: "sparkles")
+                }
+
+                Link(destination: vivySponsorURL) {
+                    Label("Sponsor vivy-company", systemImage: "heart.fill")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Preview

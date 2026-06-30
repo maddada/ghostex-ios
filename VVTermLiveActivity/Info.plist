@@ -5,7 +5,8 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>VVTerm</string>
+    <!-- CDXC:iOSNotificationBranding 2026-06-30-04:37: Live Activity notifications should identify as Ghostex, not the upstream VVTerm extension display name. -->
+    <string>Ghostex</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -13,7 +14,8 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
+    <!-- CDXC:iOSNotificationBranding 2026-06-30-04:37: Keep the extension bundle name aligned with Ghostex so notification chrome and system surfaces do not show VVTerm. -->
+    <string>Ghostex</string>
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>

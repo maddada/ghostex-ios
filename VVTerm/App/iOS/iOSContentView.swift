@@ -1458,35 +1458,37 @@ struct iOSTerminalView: View {
         }
 
         ToolbarItemGroup(placement: .navigationBarTrailing) {
-            if selectedView == "terminal" {
-                /*
-                CDXC:iOSGhostexAttachments 2026-05-29-04:03:
-                The terminal view needs a visible image/file upload affordance like Android's attach button. Keep it in the main terminal toolbar so the picker is available during active Ghostex sessions, not only through clipboard paste or the remote file browser.
-                */
-                Button {
-                    presentTerminalAttachmentPicker()
-                } label: {
-                    Image(systemName: isUploadingTerminalAttachment ? "hourglass" : "paperclip")
-                }
-                .disabled(!canUploadTerminalAttachment)
-                .accessibilityLabel("Upload Image or File")
-
-                Button {
-                    openNewTab()
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-
-            if selectedView == "files" {
-                Button {
-                    openNewFileTab()
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-
             Menu {
+                if selectedView == "terminal" {
+                    Button {
+                        presentTerminalAttachmentPicker()
+                    } label: {
+                        Label(
+                            "Upload Image or File",
+                            systemImage: isUploadingTerminalAttachment ? "hourglass" : "paperclip"
+                        )
+                    }
+                    .disabled(!canUploadTerminalAttachment)
+
+                    Button {
+                        openNewTab()
+                    } label: {
+                        Label("New Terminal", systemImage: "plus")
+                    }
+
+                    Divider()
+                }
+
+                if selectedView == "files" {
+                    Button {
+                        openNewFileTab()
+                    } label: {
+                        Label("New File Tab", systemImage: "plus")
+                    }
+
+                    Divider()
+                }
+
                 Button {
                     showingSettings = true
                 } label: {

@@ -18,7 +18,8 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
   <key>CFBundleName</key>
-  <string>$(PRODUCT_NAME)</string>
+  <!-- CDXC:iOSNotificationBranding 2026-06-30-04:37: iOS notification surfaces can display CFBundleName when a Live Activity or local notification comes from the app bundle, so the Ghostex fork must not inherit the upstream VVTerm product name here. -->
+  <string>Ghostex</string>
     <key>CFBundleURLTypes</key>
     <array>
       <dict>

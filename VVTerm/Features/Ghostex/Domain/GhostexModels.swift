@@ -26,6 +26,10 @@ struct GhostexRemoteSession: Identifiable, Hashable {
     let shouldSubmitStagedFirstPromptTitleCommand: Bool
 
     var id: String { sessionId }
+    var lastInteractionDate: Date? {
+        Self.date(from: lastInteractionAt)
+    }
+
     var displayStatus: String {
         if isSleeping && !isLive { return "sleep" }
         let activityState = Self.normalizedSessionState(activity)
@@ -160,6 +164,29 @@ struct GhostexRemoteSession: Identifiable, Hashable {
 
     private static func alias(from sessionId: String) -> String {
         String(sessionId.prefix(4))
+    }
+
+    private static func date(from value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: trimmed) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: trimmed) {
+            return date
+        }
+
+        guard let rawTimeInterval = TimeInterval(trimmed) else { return nil }
+        let timeInterval = rawTimeInterval > 10_000_000_000
+            ? rawTimeInterval / 1_000
+            : rawTimeInterval
+        return Date(timeIntervalSince1970: timeInterval)
     }
 
     private static func normalizedToken(_ value: String) -> String {
@@ -345,7 +372,51 @@ struct GhostexProjectGroup: Identifiable, Hashable {
             }
         }
 
-        return groups
+        return groups.map { group in
+            GhostexProjectGroup(
+                key: group.key,
+                projectId: group.projectId,
+                groupId: group.groupId,
+                name: group.name,
+                path: group.path,
+                sessions: sortedSessionsForDisplay(group.sessions)
+            )
+        }
+    }
+
+    private static func sortedSessionsForDisplay(_ sessions: [GhostexRemoteSession]) -> [GhostexRemoteSession] {
+        sessions.sorted { lhs, rhs in
+            let lhsPriority = sortPriority(for: lhs)
+            let rhsPriority = sortPriority(for: rhs)
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
+            }
+
+            switch (lhs.lastInteractionDate, rhs.lastInteractionDate) {
+            case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
+                return lhsDate > rhsDate
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                break
+            }
+
+            let titleComparison = lhs.displayTitle.localizedStandardCompare(rhs.displayTitle)
+            if titleComparison != .orderedSame {
+                return titleComparison == .orderedAscending
+            }
+            return lhs.sessionId < rhs.sessionId
+        }
+    }
+
+    private static func sortPriority(for session: GhostexRemoteSession) -> Int {
+        switch session.displayStatus {
+        case "done": return 0
+        case "working": return 1
+        default: return 2
+        }
     }
 }
 

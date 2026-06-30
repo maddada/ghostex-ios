@@ -40,6 +40,24 @@ struct GhostexSidebarTests {
     }
 
     @Test
+    func groupSessionsSortDoneWorkingThenLastActive() throws {
+        let output = """
+        {"sessions":[
+          {"sessionId":"idle-old","projectId":"p1","projectName":"App","status":"idle","provider":"zmx","lastInteractionAt":"2026-06-29T10:00:00Z"},
+          {"sessionId":"working-old","projectId":"p1","projectName":"App","status":"working","provider":"zmx","lastInteractionAt":"2026-06-28T10:00:00Z"},
+          {"sessionId":"sleep-new","projectId":"p1","projectName":"App","status":"sleep","provider":"zmx","lastInteractionAt":"2026-06-30T10:00:00Z"},
+          {"sessionId":"done-old","projectId":"p1","projectName":"App","status":"done","provider":"zmx","lastInteractionAt":"2026-06-27T10:00:00Z"}
+        ]}
+        """
+
+        let sessions = try GhostexRemoteSession.parseList(from: Data(output.utf8))
+        let groups = GhostexProjectGroup.groups(from: sessions)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].sessions.map(\.sessionId) == ["done-old", "working-old", "sleep-new", "idle-old"])
+    }
+
+    @Test
     func providerBackedSessionDoesNotUseLegacySleepingStatus() throws {
         /*
         CDXC:iOSGhostexSidebar 2026-05-29-09:20:
