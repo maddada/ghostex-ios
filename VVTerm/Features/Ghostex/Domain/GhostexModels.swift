@@ -548,7 +548,8 @@ struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
 enum GhostexAgentIdentity {
     private static let knownIconIds: Set<String> = [
         "amp-cli", "antigravity-cli", "browser", "claude", "cursor-cli", "codex", "copilot",
-        "factory-droid", "gemini", "grok-build", "opencode", "pi", "t3", "terminal",
+        "factory-droid", "gemini", "grok-build", "hermes-agent", "opencode", "pi", "t3",
+        "terminal",
     ]
 
     static func resolveIconId(agentIcon: String, agent: String) -> String {
@@ -569,6 +570,7 @@ enum GhostexAgentIdentity {
         case "grok", "grok build": return "grok-build"
         case "antigravity", "antigravity cli", "agy": return "antigravity-cli"
         case "amp", "amp cli": return "amp-cli"
+        case "hermes", "hermes agent", "hermes-agent": return "hermes-agent"
         case "browser": return "browser"
         default: return knownIconIds.contains(normalized) ? normalized : "terminal"
         }
