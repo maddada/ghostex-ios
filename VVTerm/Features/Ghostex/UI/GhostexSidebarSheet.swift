@@ -45,6 +45,7 @@ struct GhostexSessionsView: View {
     @ObservedObject var sessionManager: ConnectionSessionManager
     @ObservedObject var store: GhostexSidebarStore
     let onOpenTerminal: () -> Void
+    let onReturnToSessions: () -> Void
 
     @State private var detailSession: GhostexRemoteSession?
     @State private var detailProject: GhostexProjectGroup?
@@ -224,17 +225,58 @@ struct GhostexSessionsView: View {
             ForEach(Array(displayedProjectGroups.enumerated()), id: \.element.id) { index, project in
                 Section {
                     if isFiltering || !store.isProjectCollapsed(project) {
-                        ForEach(project.sessions) { session in
-                            GhostexSessionRow(session: session)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    attach(session)
-                                }
-                                .contextMenu {
-                                    sessionMenu(session)
+                        if !isFiltering, !launcherAgents(for: project).isEmpty || !project.quickActions.isEmpty {
+                            /*
+                            CDXC:iOSGhostexSidebarParity 2026-07-12:
+                            The agents isle and quick actions render as one
+                            horizontally scrollable launcher row under each
+                            expanded project header, mirroring the GPUI
+                            desktop per-project launcher surface.
+                            */
+                            GhostexLauncherIsle(
+                                agents: launcherAgents(for: project),
+                                quickActions: project.quickActions,
+                                onLaunchAgent: { launchAgent($0, in: project) },
+                                onRunQuickAction: { runQuickAction($0, in: project) }
+                            )
+                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                        }
+
+                        if project.sessions.isEmpty, !isFiltering {
+                            Text("No sessions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 6)
+                        }
+
+                        ForEach(project.sessionGroups) { sessionGroup in
+                            if !sessionGroup.isMain {
+                                GhostexSessionGroupHeaderRow(
+                                    title: sessionGroup.title,
+                                    sessionCount: sessionGroup.sessions.count,
+                                    isCollapsed: !isFiltering && store.isSessionGroupCollapsed(sessionGroup, in: project),
+                                    onToggle: {
+                                        if !isFiltering {
+                                            store.toggleSessionGroupCollapse(sessionGroup, in: project)
+                                        }
+                                    }
+                                )
+                            }
+                            if sessionGroup.isMain || isFiltering || !store.isSessionGroupCollapsed(sessionGroup, in: project) {
+                                ForEach(sessionGroup.sessions) { session in
+                                    GhostexSessionRow(session: session)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            attach(session)
+                                        }
+                                        .contextMenu {
+                                            sessionMenu(session)
+                                        }
                                 }
                             }
                         }
+                    }
                 } header: {
                     GhostexProjectHeader(
                         project: project,
@@ -335,13 +377,60 @@ struct GhostexSessionsView: View {
         }
     }
 
+    private func launcherAgents(for project: GhostexProjectGroup) -> [GhostexAgentLauncher] {
+        // Agent launches need a project id for `ghostex create-agent --project-id`.
+        project.projectId.isEmpty ? [] : store.agents
+    }
+
     private func createAndAttachSession(in project: GhostexProjectGroup) {
+        runInstantCreation(label: "Creating terminal…") {
+            try await store.createSession(in: project, using: serverManager, sessionManager: sessionManager)
+        }
+    }
+
+    private func launchAgent(_ agent: GhostexAgentLauncher, in project: GhostexProjectGroup) {
+        runInstantCreation(label: "Starting \(agent.name)…") {
+            try await store.createAgentSession(agent, in: project, using: serverManager, sessionManager: sessionManager)
+        }
+    }
+
+    private func runQuickAction(_ action: GhostexQuickAction, in project: GhostexProjectGroup) {
+        if action.isBrowserAction {
+            /*
+            CDXC:iOSGhostexSidebarParity 2026-07-12:
+            Browser quick actions carry their URL in the mobile summary, so
+            open it directly on-device instead of asking the Mac over SSH.
+            */
+            guard let url = URL(string: action.url), url.scheme != nil else {
+                store.reportError(GhostexError("Quick action \(action.name) does not have a valid URL."))
+                return
+            }
+            UIApplication.shared.open(url)
+            return
+        }
+        runInstantCreation(label: "Running \(action.name)…") {
+            try await store.runTerminalQuickAction(action, in: project, using: serverManager, sessionManager: sessionManager)
+        }
+    }
+
+    private func runInstantCreation(label: String, operation: @escaping () async throws -> Void) {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        Creation taps must leave the sessions list immediately: switch to the
+        terminal page first with the store's pending-creation overlay visible,
+        run the SSH create + attach in the background, and on failure return
+        to the sessions page where the store error alert surfaces.
+        */
+        store.beginPendingCreation(label: label)
+        onOpenTerminal()
         Task {
             do {
-                try await store.createSession(in: project, using: serverManager, sessionManager: sessionManager)
-                onOpenTerminal()
+                try await operation()
+                store.endPendingCreation()
             } catch {
+                store.endPendingCreation()
                 store.reportError(error)
+                onReturnToSessions()
             }
         }
     }
@@ -381,9 +470,18 @@ struct GhostexSessionsView: View {
             project.projectId,
             project.groupId,
         ])
-        let filteredSessions = projectMatches
-            ? project.sessions
-            : project.sessions.filter { matches($0, query: query) }
+        let filteredSessionGroups: [GhostexProjectSessionGroup] = project.sessionGroups.compactMap { sessionGroup in
+            let keptSessions = projectMatches
+                ? sessionGroup.sessions
+                : sessionGroup.sessions.filter { matches($0, query: query) }
+            guard !keptSessions.isEmpty else { return nil }
+            return GhostexProjectSessionGroup(
+                groupId: sessionGroup.groupId,
+                title: sessionGroup.title,
+                sessions: keptSessions
+            )
+        }
+        let filteredSessions = filteredSessionGroups.flatMap(\.sessions)
         guard !filteredSessions.isEmpty else { return nil }
         return GhostexProjectGroup(
             key: project.key,
@@ -391,7 +489,9 @@ struct GhostexSessionsView: View {
             groupId: project.groupId,
             name: project.name,
             path: project.path,
-            sessions: filteredSessions
+            sessions: filteredSessions,
+            sessionGroups: filteredSessionGroups,
+            quickActions: project.quickActions
         )
     }
 
@@ -621,6 +721,118 @@ private struct GhostexAgentIconView: View {
         }
         .frame(width: 38, height: 38)
         .accessibilityLabel(session.agent.isEmpty ? "Terminal" : session.agent)
+    }
+}
+
+private struct GhostexSessionGroupHeaderRow: View {
+    let title: String
+    let sessionCount: Int
+    let isCollapsed: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 8) {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 12)
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text("\(sessionCount)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title), \(sessionCount) sessions, \(isCollapsed ? "collapsed" : "expanded")")
+    }
+}
+
+private struct GhostexLauncherIsle: View {
+    let agents: [GhostexAgentLauncher]
+    let quickActions: [GhostexQuickAction]
+    let onLaunchAgent: (GhostexAgentLauncher) -> Void
+    let onRunQuickAction: (GhostexQuickAction) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(agents) { agent in
+                    agentChip(agent)
+                }
+
+                if !agents.isEmpty && !quickActions.isEmpty {
+                    Divider()
+                        .frame(height: 22)
+                }
+
+                ForEach(quickActions) { action in
+                    quickActionChip(action)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func agentChip(_ agent: GhostexAgentLauncher) -> some View {
+        let iconId = GhostexAgentIdentity.resolveIconId(agentIcon: agent.icon, agent: agent.name)
+        let tint = GhostexAgentIdentity.tint(for: iconId)
+        return Button {
+            onLaunchAgent(agent)
+        } label: {
+            HStack(spacing: 6) {
+                Image(GhostexAgentIdentity.assetName(for: iconId))
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+
+                Text(agent.name)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Start \(agent.name) session")
+    }
+
+    private func quickActionChip(_ action: GhostexQuickAction) -> some View {
+        Button {
+            onRunQuickAction(action)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: action.isBrowserAction ? "globe" : "play.circle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                Text(action.name)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(action.isBrowserAction ? "Open \(action.name)" : "Run \(action.name)")
     }
 }
 

@@ -786,6 +786,31 @@ private enum TerminalAttachmentUploadViewError: LocalizedError {
     }
 }
 
+private struct GhostexPendingCreationOverlay: View {
+    let label: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+
+            HStack(spacing: 12) {
+                ProgressView()
+                    .tint(.white)
+                Text(label)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+    }
+}
+
 struct iOSTerminalView: View {
     @ObservedObject var sessionManager: ConnectionSessionManager
     @ObservedObject var serverManager: ServerManager
@@ -1228,6 +1253,18 @@ struct iOSTerminalView: View {
                     NavBarBackdrop(color: terminalBackgroundColor)
                 }
             }
+            .overlay {
+                /*
+                CDXC:iOSGhostexSidebarParity 2026-07-12:
+                Ghostex create taps switch to the terminal page immediately;
+                this overlay is the visible "creating" state while the SSH
+                create + attach continues in the background.
+                */
+                if selectedView == ConnectionViewTab.terminal.id,
+                   let creationLabel = ghostexStore.pendingCreationLabel {
+                    GhostexPendingCreationOverlay(label: creationLabel)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if effectiveZenModeEnabled {
                     zenModeOverlay
@@ -1344,6 +1381,18 @@ struct iOSTerminalView: View {
                 currentServerId = sessionManager.selectedSession?.serverId ?? currentServerId ?? selectedServer?.id
                 if let serverId = currentServerId ?? selectedServer?.id ?? connectingServer?.id {
                     sessionManager.selectedViewByServer[serverId] = ConnectionViewTab.terminal.id
+                }
+            },
+            onReturnToSessions: {
+                /*
+                CDXC:iOSGhostexSidebarParity 2026-07-12:
+                Instant create taps jump to the terminal page before the SSH
+                round trip finishes; when that background creation fails the
+                user must land back on the sessions page where the Ghostex
+                error alert is presented.
+                */
+                if let serverId = currentServerId ?? sessionManager.selectedSession?.serverId ?? selectedServer?.id ?? connectingServer?.id {
+                    sessionManager.selectedViewByServer[serverId] = ConnectionViewTab.sessions.id
                 }
             }
         )

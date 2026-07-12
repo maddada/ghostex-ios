@@ -27,6 +27,7 @@ struct GhostexRemoteSession: Identifiable, Hashable, Sendable {
     let displayStatus: String
     let displaySortPriority: Int
     let shouldSubmitStagedFirstPromptTitleCommand: Bool
+    let sortOrder: Int?
 
     var id: String { sessionId }
 
@@ -142,6 +143,14 @@ struct GhostexRemoteSession: Identifiable, Hashable, Sendable {
         )
         displaySortPriority = Self.sortPriority(forDisplayStatus: displayStatus)
         shouldSubmitStagedFirstPromptTitleCommand = (json["shouldSubmitStagedFirstPromptTitleCommand"] as? Bool) ?? false
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        The mobile summary now pre-sorts `sessions[]` to match the GPUI desktop
+        sidebar and marks that with per-session `sortOrder`. Keep the field
+        optional so older CLIs without it fall back to the legacy status/date
+        display sort.
+        */
+        sortOrder = (json["sortOrder"] as? NSNumber)?.intValue
     }
 
     nonisolated var isZmxBacked: Bool {
@@ -349,20 +358,156 @@ struct GhostexRemoteSession: Identifiable, Hashable, Sendable {
     }
 }
 
+struct GhostexRemoteProject: Identifiable, Hashable, Sendable {
+    let projectId: String
+    let name: String
+    let path: String
+
+    var id: String { projectId }
+
+    nonisolated init?(json: [String: Any]) {
+        let id = GhostexJSONValue.string(json["projectId"] ?? json["id"])
+        guard !id.isEmpty else { return nil }
+        projectId = id
+        path = GhostexJSONValue.string(json["path"] ?? json["projectPath"])
+        let rawName = GhostexJSONValue.string(json["name"] ?? json["projectName"])
+        if !rawName.isEmpty {
+            name = rawName
+        } else if let lastPathComponent = path.split(separator: "/").last, !lastPathComponent.isEmpty {
+            name = String(lastPathComponent)
+        } else {
+            name = "Project"
+        }
+    }
+}
+
+struct GhostexNamedSessionGroup: Identifiable, Hashable, Sendable {
+    let groupId: String
+    let title: String
+    let sessionIds: [String]
+
+    var id: String { groupId }
+
+    nonisolated init?(json: [String: Any]) {
+        let id = GhostexJSONValue.string(json["groupId"] ?? json["id"])
+        guard !id.isEmpty else { return nil }
+        groupId = id
+        let rawTitle = GhostexJSONValue.string(json["title"] ?? json["name"])
+        title = rawTitle.isEmpty ? id : rawTitle
+        sessionIds = GhostexJSONValue.stringArray(json["sessionIds"])
+    }
+}
+
+struct GhostexWorkspaceGroups: Hashable, Sendable {
+    nonisolated static let empty = GhostexWorkspaceGroups(projectOrder: [], groupsByProject: [:])
+
+    let projectOrder: [String]
+    let groupsByProject: [String: [GhostexNamedSessionGroup]]
+
+    nonisolated init(projectOrder: [String], groupsByProject: [String: [GhostexNamedSessionGroup]]) {
+        self.projectOrder = projectOrder
+        self.groupsByProject = groupsByProject
+    }
+
+    nonisolated init(json: [String: Any]?) {
+        guard let json else {
+            self = .empty
+            return
+        }
+        projectOrder = GhostexJSONValue.stringArray(json["projectOrder"])
+        var byProject: [String: [GhostexNamedSessionGroup]] = [:]
+        if let projects = json["projects"] as? [String: Any] {
+            for (projectId, value) in projects {
+                guard let projectJSON = value as? [String: Any],
+                      let rawGroups = projectJSON["groups"] as? [[String: Any]] else { continue }
+                let groups = rawGroups.compactMap(GhostexNamedSessionGroup.init(json:))
+                if !groups.isEmpty {
+                    byProject[projectId] = groups
+                }
+            }
+        }
+        groupsByProject = byProject
+    }
+}
+
+struct GhostexAgentLauncher: Identifiable, Hashable, Sendable {
+    let agentId: String
+    let icon: String
+    let name: String
+
+    var id: String { agentId }
+
+    nonisolated init?(json: [String: Any]) {
+        let id = GhostexJSONValue.string(json["agentId"] ?? json["id"])
+        guard !id.isEmpty else { return nil }
+        agentId = id
+        icon = GhostexJSONValue.string(json["icon"])
+        let rawName = GhostexJSONValue.string(json["name"])
+        name = rawName.isEmpty ? id : rawName
+    }
+}
+
+struct GhostexQuickAction: Identifiable, Hashable, Sendable {
+    let actionType: String
+    let commandId: String
+    let icon: String
+    let name: String
+    let url: String
+
+    var id: String { commandId.isEmpty ? "\(actionType):\(name):\(url)" : commandId }
+    var isBrowserAction: Bool { actionType == "browser" }
+
+    nonisolated init?(json: [String: Any]) {
+        let type = GhostexJSONValue.string(json["actionType"] ?? json["type"]).lowercased()
+        guard type == "terminal" || type == "browser" else { return nil }
+        actionType = type
+        commandId = GhostexJSONValue.string(json["commandId"] ?? json["id"])
+        icon = GhostexJSONValue.string(json["icon"])
+        url = GhostexJSONValue.string(json["url"])
+        let rawName = GhostexJSONValue.string(json["name"] ?? json["title"])
+        name = rawName.isEmpty ? (type == "browser" ? "Open URL" : "Run Action") : rawName
+        if type == "terminal" && commandId.isEmpty { return nil }
+        if type == "browser" && url.isEmpty { return nil }
+    }
+}
+
+enum GhostexJSONValue {
+    nonisolated static func string(_ value: Any?) -> String {
+        if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let value = value as? NSNumber { return value.stringValue }
+        return ""
+    }
+
+    nonisolated static func stringArray(_ value: Any?) -> [String] {
+        guard let values = value as? [Any] else { return [] }
+        return values.map(string).filter { !$0.isEmpty }
+    }
+}
+
 struct GhostexSessionListSnapshot: Hashable, Sendable {
     static let empty = GhostexSessionListSnapshot(
         revision: "",
         sessions: [],
         projectGroups: [],
+        agents: [],
         fingerprint: ""
     )
 
     let revision: String
     let sessions: [GhostexRemoteSession]
     let projectGroups: [GhostexProjectGroup]
+    let agents: [GhostexAgentLauncher]
     let fingerprint: String
 
     nonisolated static func parse(from data: Data) throws -> GhostexSessionListSnapshot {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        The mobile summary also carries the desktop workspace shape: the full
+        active-project list (including zero-session projects), the GPUI project
+        order, per-project named session groups, the global agent launcher
+        list, and per-project quick actions. All of these are optional so older
+        CLIs keep the previous sessions-only rendering.
+        */
         let jsonData = try GhostexRemoteSession.sessionListJSONData(from: data)
         guard let root = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             throw GhostexError("Ghostex sessions output was not JSON.")
@@ -373,23 +518,59 @@ struct GhostexSessionListSnapshot: Hashable, Sendable {
 
         let rawSessions = root["sessions"] as? [[String: Any]] ?? []
         let sessions = rawSessions.compactMap(GhostexRemoteSession.init(json:)).filter(\.isZmxBacked)
-        let projectGroups = GhostexProjectGroup.groups(from: sessions)
+
+        let rawProjects = root["projects"] as? [[String: Any]] ?? []
+        let projects = rawProjects.compactMap(GhostexRemoteProject.init(json:))
+
+        let workspaceGroups = GhostexWorkspaceGroups(json: root["workspaceGroups"] as? [String: Any])
+
+        let rawAgents = root["agents"] as? [[String: Any]] ?? []
+        let agents = rawAgents.compactMap(GhostexAgentLauncher.init(json:))
+
+        var quickActionsByProject: [String: [GhostexQuickAction]] = [:]
+        if let rawQuickActions = root["quickActionsByProject"] as? [String: Any] {
+            for (projectId, value) in rawQuickActions {
+                guard let rawActions = value as? [[String: Any]] else { continue }
+                let actions = rawActions.compactMap(GhostexQuickAction.init(json:))
+                if !actions.isEmpty {
+                    quickActionsByProject[projectId] = actions
+                }
+            }
+        }
+
+        let projectGroups = GhostexProjectGroup.groups(
+            from: sessions,
+            projects: projects,
+            workspaceGroups: workspaceGroups,
+            quickActionsByProject: quickActionsByProject
+        )
         return GhostexSessionListSnapshot(
             revision: string(root["revision"] ?? root["snapshotRevision"] ?? root["requestId"]),
             sessions: sessions,
             projectGroups: projectGroups,
-            fingerprint: fingerprint(for: sessions)
+            agents: agents,
+            fingerprint: fingerprint(
+                for: sessions,
+                projects: projects,
+                workspaceGroups: workspaceGroups,
+                agents: agents,
+                quickActionsByProject: quickActionsByProject
+            )
         )
     }
 
     nonisolated private static func string(_ value: Any?) -> String {
-        if let value = value as? String { return value.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if let value = value as? NSNumber { return value.stringValue }
-        return ""
+        GhostexJSONValue.string(value)
     }
 
-    nonisolated private static func fingerprint(for sessions: [GhostexRemoteSession]) -> String {
-        sessions.map { session in
+    nonisolated private static func fingerprint(
+        for sessions: [GhostexRemoteSession],
+        projects: [GhostexRemoteProject],
+        workspaceGroups: GhostexWorkspaceGroups,
+        agents: [GhostexAgentLauncher],
+        quickActionsByProject: [String: [GhostexQuickAction]]
+    ) -> String {
+        let sessionsFingerprint = sessions.map { session in
             [
                 session.sessionId,
                 session.projectId,
@@ -409,9 +590,58 @@ struct GhostexSessionListSnapshot: Hashable, Sendable {
                 session.isSleeping ? "1" : "0",
                 session.lastInteractionAt,
                 session.shouldSubmitStagedFirstPromptTitleCommand ? "1" : "0",
+                session.sortOrder.map(String.init) ?? "",
             ].joined(separator: "\u{1F}")
         }.joined(separator: "\u{1E}")
+
+        let projectsFingerprint = projects.map {
+            [$0.projectId, $0.name, $0.path].joined(separator: "\u{1F}")
+        }.joined(separator: "\u{1E}")
+
+        let groupsFingerprint = workspaceGroups.groupsByProject.keys.sorted().map { projectId in
+            let groups = (workspaceGroups.groupsByProject[projectId] ?? []).map {
+                ([$0.groupId, $0.title] + $0.sessionIds).joined(separator: "\u{1F}")
+            }.joined(separator: "\u{1E}")
+            return projectId + "\u{1E}" + groups
+        }.joined(separator: "\u{1D}")
+
+        let agentsFingerprint = agents.map {
+            [$0.agentId, $0.icon, $0.name].joined(separator: "\u{1F}")
+        }.joined(separator: "\u{1E}")
+
+        let quickActionsFingerprint = quickActionsByProject.keys.sorted().map { projectId in
+            let actions = (quickActionsByProject[projectId] ?? []).map {
+                [$0.actionType, $0.commandId, $0.icon, $0.name, $0.url].joined(separator: "\u{1F}")
+            }.joined(separator: "\u{1E}")
+            return projectId + "\u{1E}" + actions
+        }.joined(separator: "\u{1D}")
+
+        return [
+            sessionsFingerprint,
+            projectsFingerprint,
+            workspaceGroups.projectOrder.joined(separator: "\u{1F}"),
+            groupsFingerprint,
+            agentsFingerprint,
+            quickActionsFingerprint,
+        ].joined(separator: "\u{1C}")
     }
+}
+
+struct GhostexProjectSessionGroup: Identifiable, Hashable, Sendable {
+    /*
+    CDXC:iOSGhostexSidebarParity 2026-07-12:
+    A project renders as ordered session sections: the implicit main group
+    first (all project sessions no named group claims, in payload order), then
+    each GPUI named group in `workspaceGroups` order with its sessions in the
+    group's `sessionIds` order. The main group has no header; named groups get
+    a collapsible header row.
+    */
+    let groupId: String
+    let title: String
+    let sessions: [GhostexRemoteSession]
+
+    var isMain: Bool { groupId.isEmpty }
+    var id: String { groupId.isEmpty ? "__main__" : groupId }
 }
 
 struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
@@ -421,6 +651,8 @@ struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
     let name: String
     let path: String
     let sessions: [GhostexRemoteSession]
+    let sessionGroups: [GhostexProjectSessionGroup]
+    let quickActions: [GhostexQuickAction]
     let workingCount: Int
     let sleepingCount: Int
     let attentionCount: Int
@@ -434,6 +666,8 @@ struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
         name: String,
         path: String,
         sessions: [GhostexRemoteSession],
+        sessionGroups: [GhostexProjectSessionGroup]? = nil,
+        quickActions: [GhostexQuickAction] = [],
         workingCount: Int? = nil,
         sleepingCount: Int? = nil,
         attentionCount: Int? = nil
@@ -444,12 +678,19 @@ struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
         self.name = name
         self.path = path
         self.sessions = sessions
+        self.sessionGroups = sessionGroups ?? [GhostexProjectSessionGroup(groupId: "", title: "", sessions: sessions)]
+        self.quickActions = quickActions
         self.workingCount = workingCount ?? sessions.filter { $0.displayStatus != "sleep" }.count
         self.sleepingCount = sleepingCount ?? sessions.filter { $0.displayStatus == "sleep" }.count
         self.attentionCount = attentionCount ?? sessions.filter { $0.displayStatus == "attention" }.count
     }
 
-    nonisolated static func groups(from sessions: [GhostexRemoteSession]) -> [GhostexProjectGroup] {
+    nonisolated static func groups(
+        from sessions: [GhostexRemoteSession],
+        projects: [GhostexRemoteProject] = [],
+        workspaceGroups: GhostexWorkspaceGroups = .empty,
+        quickActionsByProject: [String: [GhostexQuickAction]] = [:]
+    ) -> [GhostexProjectGroup] {
         struct Accumulator {
             let key: String
             let projectId: String
@@ -502,19 +743,121 @@ struct GhostexProjectGroup: Identifiable, Hashable, Sendable {
             }
         }
 
-        return groups.map { group in
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        Every active project must render a section, including projects with
+        zero sessions, so mobile can create the first terminal or agent there.
+        Session-derived groups come first in payload order; the mobile summary
+        `projects` array only appends the projects no session referenced.
+        */
+        var mergedGroups = groups.map { group -> GhostexProjectGroup in
             GhostexProjectGroup(
                 key: group.key,
                 projectId: group.projectId,
                 groupId: group.groupId,
                 name: group.name,
                 path: group.path,
-                sessions: sortedSessionsForDisplay(group.sessions),
-                workingCount: group.workingCount,
-                sleepingCount: group.sleepingCount,
-                attentionCount: group.attentionCount
+                sessions: displaySessions(for: group.sessions),
+                quickActions: quickActionsByProject[group.projectId] ?? []
             )
         }
+        let knownKeys = Set(mergedGroups.map(\.key))
+        let knownPaths = Set(mergedGroups.map(\.path).filter { !$0.isEmpty })
+        for project in projects
+        where !knownKeys.contains(project.projectId) && (project.path.isEmpty || !knownPaths.contains(project.path)) {
+            mergedGroups.append(GhostexProjectGroup(
+                key: project.projectId,
+                projectId: project.projectId,
+                groupId: "",
+                name: project.name,
+                path: project.path,
+                sessions: [],
+                quickActions: quickActionsByProject[project.projectId] ?? []
+            ))
+        }
+
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        Project sections follow the GPUI desktop order from
+        `workspaceGroups.projectOrder`; projects the desktop payload does not
+        list keep their current relative order after the ordered ones.
+        */
+        var orderIndexByProjectId: [String: Int] = [:]
+        for (index, projectId) in workspaceGroups.projectOrder.enumerated() where orderIndexByProjectId[projectId] == nil {
+            orderIndexByProjectId[projectId] = index
+        }
+        let orderedGroups = mergedGroups.enumerated().sorted { lhs, rhs in
+            switch (orderIndexByProjectId[lhs.element.projectId], orderIndexByProjectId[rhs.element.projectId]) {
+            case let (lhsOrder?, rhsOrder?):
+                return lhsOrder < rhsOrder
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                return lhs.offset < rhs.offset
+            }
+        }.map(\.element)
+
+        return orderedGroups.map { group in
+            GhostexProjectGroup(
+                key: group.key,
+                projectId: group.projectId,
+                groupId: group.groupId,
+                name: group.name,
+                path: group.path,
+                sessions: group.sessions,
+                sessionGroups: sessionGroups(
+                    for: group.sessions,
+                    namedGroups: workspaceGroups.groupsByProject[group.projectId] ?? []
+                ),
+                quickActions: group.quickActions
+            )
+        }
+    }
+
+    nonisolated private static func displaySessions(for sessions: [GhostexRemoteSession]) -> [GhostexRemoteSession] {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        When the CLI marks the payload as pre-sorted (any session carries
+        `sortOrder`), preserve the array order so mobile matches the GPUI
+        desktop sidebar. Older CLIs keep the legacy status/date sort.
+        */
+        sessions.contains { $0.sortOrder != nil } ? sessions : sortedSessionsForDisplay(sessions)
+    }
+
+    nonisolated private static func sessionGroups(
+        for sessions: [GhostexRemoteSession],
+        namedGroups: [GhostexNamedSessionGroup]
+    ) -> [GhostexProjectSessionGroup] {
+        guard !namedGroups.isEmpty else {
+            return [GhostexProjectSessionGroup(groupId: "", title: "", sessions: sessions)]
+        }
+
+        var sessionsById: [String: GhostexRemoteSession] = [:]
+        for session in sessions where !sessionsById.keys.contains(session.sessionId) {
+            sessionsById[session.sessionId] = session
+        }
+
+        var claimedSessionIds = Set<String>()
+        var namedSections: [GhostexProjectSessionGroup] = []
+        for namedGroup in namedGroups {
+            var resolved: [GhostexRemoteSession] = []
+            for sessionId in namedGroup.sessionIds {
+                guard let session = sessionsById[sessionId], !claimedSessionIds.contains(sessionId) else { continue }
+                claimedSessionIds.insert(sessionId)
+                resolved.append(session)
+            }
+            guard !resolved.isEmpty else { continue }
+            namedSections.append(GhostexProjectSessionGroup(
+                groupId: namedGroup.groupId,
+                title: namedGroup.title,
+                sessions: resolved
+            ))
+        }
+
+        let mainSessions = sessions.filter { !claimedSessionIds.contains($0.sessionId) }
+        return [GhostexProjectSessionGroup(groupId: "", title: "", sessions: mainSessions)] + namedSections
     }
 
     nonisolated private static func sortedSessionsForDisplay(_ sessions: [GhostexRemoteSession]) -> [GhostexRemoteSession] {
@@ -648,6 +991,31 @@ enum GhostexRemoteCommand {
         var command = "ghostex create-session --json"
         if !project.projectId.isEmpty { command += " --project-id \(shellQuote(project.projectId))" }
         if !project.groupId.isEmpty { command += " --group-id \(shellQuote(project.groupId))" }
+        return loginShellCommand(command)
+    }
+
+    static func createAgent(agentId: String, project: GhostexProjectGroup) -> String {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        `ghostex create-agent` creates and starts an agent session on the Mac
+        host in one call; the result JSON matches create-session, so the
+        existing created-session-id extraction and attach flow apply.
+        */
+        var command = "ghostex create-agent \(shellQuote(agentId))"
+        if !project.projectId.isEmpty { command += " --project-id \(shellQuote(project.projectId))" }
+        command += " --json"
+        return loginShellCommand(command)
+    }
+
+    static func runAction(commandId: String, project: GhostexProjectGroup) -> String {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        `ghostex run-action` always prints JSON. iOS only routes terminal quick
+        actions through SSH; browser quick actions open their summary-provided
+        URL on-device without a round trip.
+        */
+        var command = "ghostex run-action \(shellQuote(commandId))"
+        if !project.projectId.isEmpty { command += " --project-id \(shellQuote(project.projectId))" }
         return loginShellCommand(command)
     }
 

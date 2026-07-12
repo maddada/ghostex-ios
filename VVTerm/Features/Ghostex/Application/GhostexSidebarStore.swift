@@ -11,9 +11,19 @@ final class GhostexSidebarStore: ObservableObject {
     }
     @Published private(set) var sessions: [GhostexRemoteSession] = []
     @Published private(set) var projectGroups: [GhostexProjectGroup] = []
+    @Published private(set) var agents: [GhostexAgentLauncher] = []
     @Published private(set) var collapsedProjectKeys: Set<String> = []
+    @Published private(set) var collapsedSessionGroupKeys: Set<String> = []
     @Published private(set) var isRefreshing = false
     @Published private(set) var isRunningAction = false
+    /*
+    CDXC:iOSGhostexSidebarParity 2026-07-12:
+    New-terminal, agent, and terminal quick-action taps switch to the terminal
+    page immediately while the SSH create + attach round trip continues in the
+    background. `pendingCreationLabel` drives the "Creating terminal" style
+    overlay on the terminal page until that background work settles.
+    */
+    @Published private(set) var pendingCreationLabel: String?
     @Published private(set) var lastError: String?
     @Published private(set) var logs: [String] = []
 
@@ -162,6 +172,62 @@ final class GhostexSidebarStore: ObservableObject {
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
+        try await createAndAttachRemoteSession(
+            command: GhostexRemoteCommand.createSession(project: project),
+            description: "create session in \(project.name)",
+            using: serverManager,
+            sessionManager: sessionManager
+        )
+    }
+
+    func createAgentSession(
+        _ agent: GhostexAgentLauncher,
+        in project: GhostexProjectGroup,
+        using serverManager: ServerManager,
+        sessionManager: ConnectionSessionManager
+    ) async throws {
+        guard !project.projectId.isEmpty else {
+            throw GhostexError("This project does not have a Ghostex project id.")
+        }
+        try await createAndAttachRemoteSession(
+            command: GhostexRemoteCommand.createAgent(agentId: agent.agentId, project: project),
+            description: "start \(agent.name) in \(project.name)",
+            using: serverManager,
+            sessionManager: sessionManager
+        )
+    }
+
+    func runTerminalQuickAction(
+        _ action: GhostexQuickAction,
+        in project: GhostexProjectGroup,
+        using serverManager: ServerManager,
+        sessionManager: ConnectionSessionManager
+    ) async throws {
+        guard !project.projectId.isEmpty else {
+            throw GhostexError("This project does not have a Ghostex project id.")
+        }
+        try await createAndAttachRemoteSession(
+            command: GhostexRemoteCommand.runAction(commandId: action.commandId, project: project),
+            description: "run \(action.name) in \(project.name)",
+            using: serverManager,
+            sessionManager: sessionManager
+        )
+    }
+
+    func beginPendingCreation(label: String) {
+        pendingCreationLabel = label
+    }
+
+    func endPendingCreation() {
+        pendingCreationLabel = nil
+    }
+
+    private func createAndAttachRemoteSession(
+        command: String,
+        description: String,
+        using serverManager: ServerManager,
+        sessionManager: ConnectionSessionManager
+    ) async throws {
         guard let server = selectedServer(from: serverManager.servers) else {
             throw GhostexError("Select a Ghostex host before creating a session.")
         }
@@ -169,15 +235,20 @@ final class GhostexSidebarStore: ObservableObject {
         /*
         CDXC:iOSGhostexSidebar 2026-05-28-17:43:
         Creating a project session from mobile should match Android and macOS behavior: ask the Mac app to create the ZMX-backed terminal, refresh the sidebar inventory, then attach the new session immediately when the CLI returns a stable session id.
+
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        create-session, create-agent, and run-action (terminal) share one
+        create-and-attach flow because all three return the same
+        `session.sessionId` JSON shape.
         */
         isRunningAction = true
         if lastError != nil {
             lastError = nil
         }
-        appendLog("Running Ghostex action: create session in \(project.name).")
+        appendLog("Running Ghostex action: \(description).")
         do {
-            let output = try await execute(GhostexRemoteCommand.createSession(project: project), on: server)
-            appendLog("Action finished: create session in \(project.name).")
+            let output = try await execute(command, on: server)
+            appendLog("Action finished: \(description).")
             await loadSessions(using: serverManager)
 
             guard let createdSessionId = GhostexCreateSessionResult.createdSessionId(from: output) else {
@@ -191,7 +262,7 @@ final class GhostexSidebarStore: ObservableObject {
         } catch {
             isRunningAction = false
             lastError = error.localizedDescription
-            appendLog("Action failed: create session in \(project.name): \(error.localizedDescription)")
+            appendLog("Action failed: \(description): \(error.localizedDescription)")
             throw error
         }
     }
@@ -275,6 +346,29 @@ final class GhostexSidebarStore: ObservableObject {
         }
     }
 
+    func isSessionGroupCollapsed(_ group: GhostexProjectSessionGroup, in project: GhostexProjectGroup) -> Bool {
+        collapsedSessionGroupKeys.contains(sessionGroupCollapseKey(project: project, group: group))
+    }
+
+    func toggleSessionGroupCollapse(_ group: GhostexProjectSessionGroup, in project: GhostexProjectGroup) {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-12:
+        Named GPUI session groups collapse like projects do: state lives in
+        this shared store for the current app run, so reopening the sessions
+        page preserves the expanded groups without persisting across restarts.
+        */
+        let key = sessionGroupCollapseKey(project: project, group: group)
+        if collapsedSessionGroupKeys.contains(key) {
+            collapsedSessionGroupKeys.remove(key)
+        } else {
+            collapsedSessionGroupKeys.insert(key)
+        }
+    }
+
+    private func sessionGroupCollapseKey(project: GhostexProjectGroup, group: GhostexProjectSessionGroup) -> String {
+        "\(project.id)\u{1F}\(group.id)"
+    }
+
     private func loadSessions(using serverManager: ServerManager, showsRefreshIndicator: Bool = true) async {
         guard let server = selectedServer(from: serverManager.servers) else {
             publishSnapshot(.empty)
@@ -339,15 +433,18 @@ final class GhostexSidebarStore: ObservableObject {
         collapsedProjectKeys = nextCollapsedProjectKeys
         sessions = snapshot.sessions
         projectGroups = snapshot.projectGroups
+        agents = snapshot.agents
         lastSessionListFingerprint = snapshot.fingerprint
     }
 
     private func resetRuntimeProjectCollapseState() {
         knownProjectKeys.removeAll()
         collapsedProjectKeys.removeAll()
+        collapsedSessionGroupKeys.removeAll()
         lastSessionListFingerprint = ""
         sessions = []
         projectGroups = []
+        agents = []
     }
 
     private func suspendRefreshesForAttach() -> Bool {
