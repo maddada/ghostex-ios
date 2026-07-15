@@ -290,10 +290,12 @@ struct GhostexSidebarTests {
     }
 
     @Test
-    func liveZmxAttachCommandUsesProviderSessionDirectly() {
+    func liveZmxAttachCommandUsesStableGhostexSessionId() {
         /*
-        CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
-        A live zmx session row includes the provider session name, so iOS should attach directly to zmx and avoid the slower Ghostex CLI selector path that lists all sessions first.
+        CDXC:iOSRemoteAttach 2026-07-15:
+        A live gxserver row may already have lost its provider socket. Resolve
+        the stable id through Ghostex so attach metadata and the bundled zmx are
+        current when the terminal opens.
         */
         let session = GhostexRemoteSession(json: [
             "sessionId": "s1",
@@ -306,13 +308,13 @@ struct GhostexSidebarTests {
 
         let command = GhostexRemoteCommand.attach(session)
 
-        #expect(command.contains("exec zmx attach"))
-        #expect(command.contains("gx-p1-s1"))
-        #expect(!command.contains("ghostex attach --session-id"))
+        #expect(command.contains("ghostex attach --session-id"))
+        #expect(command.contains("--project-id"))
+        #expect(!command.contains("exec zmx attach"))
     }
 
     @Test
-    func zmxAttachCommandFallsBackWithoutProviderSessionName() {
+    func zmxAttachCommandUsesGhostexCliWithoutProviderSessionName() {
         let session = GhostexRemoteSession(json: [
             "sessionId": "s1",
             "projectId": "p1",

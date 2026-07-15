@@ -959,21 +959,13 @@ enum GhostexRemoteCommand {
 
     static func attach(_ session: GhostexRemoteSession) -> String {
         /*
-        CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
-        Mobile attach taps already receive the zmx provider session identity in the session list row. Use it directly for live zmx rows so opening a terminal does not run `ghostex attach --session-id`, which first performs a full inventory lookup and can add tens of seconds on large Mac hosts.
-
-        CDXC:iOSRemoteAttach 2026-07-14:
-        A phone attach must ask zmx for only the active viewport. Replaying the
-        full desktop-sized scrollback into iOS's smaller PTY can leave the
-        alternate screen empty before the post-attach redraw is available.
-        `--visible-only` makes zmx resize first and serialize the phone-sized
-        viewport, which is the mobile restore contract implemented by our fork.
+        CDXC:iOSRemoteAttach 2026-07-15:
+        `isLive` is gxserver row state and can remain true after the provider
+        socket disappears. Do not execute the mobile summary's cached provider
+        name through login-shell PATH. The stable CLI contract refreshes attach
+        metadata, handles missing-provider resume, and launches gxserver's
+        pinned bundled zmx.
         */
-        if session.isZmxBacked,
-           !session.providerSessionName.isEmpty,
-           session.providerSessionState == "exists" || session.isLive {
-            return loginShellCommand("exec zmx attach --visible-only \(shellQuote(session.providerSessionName))")
-        }
         return attach(sessionId: session.sessionId, projectId: session.projectId)
     }
 
