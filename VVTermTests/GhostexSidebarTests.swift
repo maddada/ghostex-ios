@@ -268,7 +268,7 @@ struct GhostexSidebarTests {
             title: "Bob's Session"
         )
 
-        #expect(command.hasPrefix("/bin/zsh -lc "))
+        #expect(command.hasPrefix("\"$SHELL\" -lc "))
         #expect(command.contains("rename-session"))
         #expect(command.contains("--project-id"))
         #expect(command.contains("'\"'\"'"))

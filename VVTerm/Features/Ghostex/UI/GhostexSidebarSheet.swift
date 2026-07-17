@@ -49,13 +49,26 @@ struct GhostexSessionsView: View {
 
     @State private var detailSession: GhostexRemoteSession?
     @State private var detailProject: GhostexProjectGroup?
-    @State private var renamingSession: GhostexRemoteSession?
+    @State private var renamingTarget: GhostexSessionServerTarget?
     @State private var renameTitle = ""
     @State private var showingLogs = false
+    @State private var recentProjectsServer: Server?
     @State private var filterText = ""
 
-    private var selectedServer: Server? {
-        store.selectedServer(from: serverManager.servers)
+    /*
+    CDXC:iOSGhostexMultiMachine 2026-07-18:
+    The list mirrors the desktop GPUI sidebar's stacked remote-machine
+    sections: every saved server renders at once with its own machine header
+    (when 2+ machines exist) followed by that machine's Quick/projects
+    sections. All row actions carry the machine's server explicitly, so the
+    old single-host picker is gone.
+    */
+    private var machineServers: [Server] {
+        serverManager.servers
+    }
+
+    private var showsMachineHeaders: Bool {
+        machineServers.count > 1
     }
 
     private var normalizedFilterText: String {
@@ -66,16 +79,16 @@ struct GhostexSessionsView: View {
         !normalizedFilterText.isEmpty
     }
 
-    private var displayedProjectGroups: [GhostexProjectGroup] {
-        guard isFiltering else { return store.projectGroups }
-        return store.projectGroups.compactMap { filteredProjectGroup($0, query: normalizedFilterText) }
+    private func displayedProjectGroups(for inventory: GhostexMachineInventory) -> [GhostexProjectGroup] {
+        guard isFiltering else { return inventory.projectGroups }
+        return inventory.projectGroups.compactMap { filteredProjectGroup($0, query: normalizedFilterText) }
     }
 
     var body: some View {
         List {
-            hostSection
+            machinesControlSection
             filterSection
-            sessionsSection
+            machineListSections
             runningActionSection
         }
         .listStyle(.insetGrouped)
@@ -91,6 +104,12 @@ struct GhostexSessionsView: View {
         }
         .sheet(isPresented: $showingLogs) {
             GhostexDiagnosticsView(logs: store.logs)
+        }
+        .sheet(isPresented: $showingRecentProjects) {
+            GhostexRecentProjectsView(projects: store.recentProjects) { project in
+                store.restoreRecentProject(project, using: serverManager)
+                showingRecentProjects = false
+            }
         }
         .alert("Ghostex", isPresented: Binding(
             get: { store.lastError != nil },
@@ -167,6 +186,14 @@ struct GhostexSessionsView: View {
                     Label(store.isRefreshing ? "Refreshing Sessions" : "Refresh Sessions", systemImage: "arrow.clockwise")
                 }
                 .disabled(store.isRefreshing)
+
+                if !store.recentProjects.isEmpty {
+                    Button {
+                        showingRecentProjects = true
+                    } label: {
+                        Label("Recent Projects", systemImage: "clock.arrow.circlepath")
+                    }
+                }
 
                 Button {
                     showingLogs = true
@@ -281,8 +308,8 @@ struct GhostexSessionsView: View {
                     GhostexProjectHeader(
                         project: project,
                         isCollapsed: !isFiltering && store.isProjectCollapsed(project),
-                        canMoveUp: index > 0,
-                        canMoveDown: index < displayedProjectGroups.count - 1,
+                        canMoveUp: !project.isChatCollection && displayedProjectGroups.prefix(index).contains { !$0.isChatCollection },
+                        canMoveDown: !project.isChatCollection && displayedProjectGroups.dropFirst(index + 1).contains { !$0.isChatCollection },
                         onToggleCollapse: {
                             if !isFiltering {
                                 store.toggleProjectCollapse(project)
@@ -491,7 +518,8 @@ struct GhostexSessionsView: View {
             path: project.path,
             sessions: filteredSessions,
             sessionGroups: filteredSessionGroups,
-            quickActions: project.quickActions
+            quickActions: project.quickActions,
+            isChatCollection: project.isChatCollection
         )
     }
 
@@ -874,32 +902,73 @@ private struct GhostexProjectHeader: View {
 
             Spacer()
 
-            Button(action: onCreate) {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
+            if !project.isChatCollection {
+                Button(action: onCreate) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
 
-            Menu {
-                Button("Refresh Sessions", systemImage: "arrow.clockwise", action: onRefresh)
-                Button("Wake Project Sessions", systemImage: "sun.max", action: onWake)
-                Button("Sleep Project Sessions", systemImage: "moon", action: onSleep)
-                Button(role: .destructive) {
-                    onKill()
+                Menu {
+                    Button("Refresh Sessions", systemImage: "arrow.clockwise", action: onRefresh)
+                    Button("Wake Project Sessions", systemImage: "sun.max", action: onWake)
+                    Button("Sleep Project Sessions", systemImage: "moon", action: onSleep)
+                    Button(role: .destructive) {
+                        onKill()
+                    } label: {
+                        Label("Kill Project Sessions", systemImage: "xmark.octagon")
+                    }
+                    if canMoveUp {
+                        Button("Move Project Up", systemImage: "arrow.up", action: onMoveUp)
+                    }
+                    if canMoveDown {
+                        Button("Move Project Down", systemImage: "arrow.down", action: onMoveDown)
+                    }
+                    Button("Copy Project Path", systemImage: "doc.on.doc", action: onCopyPath)
+                    Button("Details", systemImage: "info.circle", action: onDetails)
                 } label: {
-                    Label("Kill Project Sessions", systemImage: "xmark.octagon")
+                    Image(systemName: "ellipsis.circle")
                 }
-                if canMoveUp {
-                    Button("Move Project Up", systemImage: "arrow.up", action: onMoveUp)
-                }
-                if canMoveDown {
-                    Button("Move Project Down", systemImage: "arrow.down", action: onMoveDown)
-                }
-                Button("Copy Project Path", systemImage: "doc.on.doc", action: onCopyPath)
-                Button("Details", systemImage: "info.circle", action: onDetails)
-            } label: {
-                Image(systemName: "ellipsis.circle")
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
+        }
+    }
+}
+
+private struct GhostexRecentProjectsView: View {
+    let projects: [GhostexRecentProject]
+    let onRestore: (GhostexRecentProject) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(projects) { project in
+                Button {
+                    onRestore(project)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(project.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(project.path)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        Text(project.sessionCount == 1 ? "1 session" : "\(project.sessionCount) sessions")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Restores this project to the active sidebar")
+            }
+            .navigationTitle("Recent Projects")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
     }
 }

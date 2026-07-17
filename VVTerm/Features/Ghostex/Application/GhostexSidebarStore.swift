@@ -2,18 +2,32 @@ import Foundation
 import Combine
 import os.log
 
+/*
+CDXC:iOSGhostexMultiMachine 2026-07-18:
+The sessions page mirrors the desktop GPUI sidebar by stacking every saved
+machine at once, each with its own Quick/projects/session inventory. The
+store therefore keeps one inventory per server id instead of a single
+selected-host snapshot, and every action carries the explicit target server
+so identical session ids on two machines can never collide or misroute.
+*/
+struct GhostexMachineInventory: Sendable {
+    var sessions: [GhostexRemoteSession] = []
+    var projectGroups: [GhostexProjectGroup] = []
+    var agents: [GhostexAgentLauncher] = []
+    var recentProjects: [GhostexRecentProject] = []
+    var lastError: String?
+    var hasLoaded = false
+}
+
 @MainActor
 final class GhostexSidebarStore: ObservableObject {
     static let shared = GhostexSidebarStore()
 
-    @Published var selectedServerId: UUID? {
-        didSet { persistSelectedServerId() }
-    }
-    @Published private(set) var sessions: [GhostexRemoteSession] = []
-    @Published private(set) var projectGroups: [GhostexProjectGroup] = []
-    @Published private(set) var agents: [GhostexAgentLauncher] = []
+    @Published private(set) var inventoriesByServerId: [UUID: GhostexMachineInventory] = [:]
     @Published private(set) var collapsedProjectKeys: Set<String> = []
     @Published private(set) var collapsedSessionGroupKeys: Set<String> = []
+    @Published private(set) var collapsedMachineKeys: Set<String> = []
+    @Published private(set) var refreshingServerIds: Set<UUID> = []
     @Published private(set) var isRefreshing = false
     @Published private(set) var isRunningAction = false
     /*
@@ -27,15 +41,14 @@ final class GhostexSidebarStore: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var logs: [String] = []
 
-    private let selectedServerKey = "ghostex.sidebar.selectedServerId"
     private let logsKey = "ghostex.sidebar.logs"
     private let maxLogEntries = 80
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "VVTerm", category: "GhostexSidebar")
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var submittedFirstPromptTitleCommandEnterKeys = Set<String>()
-    private var knownProjectKeys: Set<String> = []
-    private var lastSessionListFingerprint = ""
+    private var knownProjectKeysByServerId: [UUID: Set<String>] = [:]
+    private var lastFingerprintByServerId: [UUID: String] = [:]
     /*
     CDXC:iOSGhostexSidebar 2026-06-12-09:48:
     Session refresh cancellation is expected when a new refresh, attach, or reuse action supersedes an in-flight list request. Track concurrent refreshes so a canceled older request cannot clear the spinner for a newer request, and keep cancellation out of user-facing errors.
@@ -45,49 +58,42 @@ final class GhostexSidebarStore: ObservableObject {
 
     CDXC:iOSRemoteAttachLatency 2026-06-30-19:07:
     Attach taps must take priority over the expensive remote inventory command. Cancel visible/background refresh tasks before opening a terminal, and slow background polling after long refreshes so a 100+ session Mac does not continuously compete with user-initiated attaches.
+
+    CDXC:iOSGhostexMultiMachine 2026-07-18:
+    Every machine refreshes concurrently: one task-group child per saved
+    server, each doing its own SSH round trip, keyed spinner state, and
+    per-server fingerprint so an unchanged machine publishes nothing while a
+    changed one republishes only its own inventory. A slow or unreachable
+    machine records its error on its own inventory instead of blocking or
+    alerting over the healthy machines; the global error alert only surfaces
+    for user-initiated refreshes and explicit actions.
     */
-    private var activeRefreshCount = 0
+    private var activeRefreshCountsByServerId: [UUID: Int] = [:]
     private let regularPollDelaySeconds = 15
     private let slowPollDelaySeconds = 60
     private let slowPollThresholdSeconds: TimeInterval = 10
 
     private init() {
-        if let raw = UserDefaults.standard.string(forKey: selectedServerKey) {
-            selectedServerId = UUID(uuidString: raw)
-        }
         logs = UserDefaults.standard.stringArray(forKey: logsKey) ?? []
     }
 
-    func selectedServer(from servers: [Server]) -> Server? {
-        if let selectedServerId,
-           let server = servers.first(where: { $0.id == selectedServerId }) {
-            return server
-        }
-        return servers.first
-    }
-
-    func selectServer(_ server: Server) {
-        guard selectedServerId != server.id else { return }
-        resetRuntimeProjectCollapseState()
-        selectedServerId = server.id
-        appendLog("Selected Ghostex host \(server.displayAddress).")
+    func inventory(for server: Server) -> GhostexMachineInventory {
+        inventoriesByServerId[server.id] ?? GhostexMachineInventory()
     }
 
     func refresh(using serverManager: ServerManager) {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
-            await self?.loadSessions(using: serverManager)
+            await self?.loadAllInventories(using: serverManager)
         }
     }
 
     func attach(
         _ session: GhostexRemoteSession,
+        on server: Server,
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
-        guard let server = selectedServer(from: serverManager.servers) else {
-            throw GhostexError("Select a Ghostex host before attaching.")
-        }
         let shouldResumePollingOnFailure = suspendRefreshesForAttach()
 
         /*
@@ -146,12 +152,14 @@ final class GhostexSidebarStore: ObservableObject {
     func runSessionAction(
         _ action: String,
         session: GhostexRemoteSession,
+        on server: Server,
         using serverManager: ServerManager
     ) {
         runRemote(
             GhostexRemoteCommand.sessionAction(action, session: session),
             description: "\(action) \(session.sessionId)",
             refreshAfter: true,
+            on: server,
             using: serverManager
         )
     }
@@ -159,22 +167,48 @@ final class GhostexSidebarStore: ObservableObject {
     func runProjectAction(
         _ action: String,
         project: GhostexProjectGroup,
+        on server: Server,
         using serverManager: ServerManager
     ) {
         Task { [weak self] in
             guard let self else { return }
-            await runProjectActionQueue(action, sessions: project.sessions, using: serverManager)
+            await runProjectActionQueue(action, sessions: project.sessions, on: server, using: serverManager)
         }
     }
 
     func createSession(
         in project: GhostexProjectGroup,
+        on server: Server,
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
         try await createAndAttachRemoteSession(
             command: GhostexRemoteCommand.createSession(project: project),
             description: "create session in \(project.name)",
+            on: server,
+            using: serverManager,
+            sessionManager: sessionManager
+        )
+    }
+
+    func createChatSession(
+        on server: Server,
+        using serverManager: ServerManager,
+        sessionManager: ConnectionSessionManager
+    ) async throws {
+        /*
+        CDXC:iOSGhostexSidebarParity 2026-07-18:
+        The Quick header "+" mirrors the desktop New Chat action: every Quick
+        session gets a fresh projectless chat workspace, so this cannot go
+        through `create-session --project-id`. The chat-create command makes
+        the ~/ghostex/chats folder and creates its first terminal in one SSH
+        round trip; the result JSON matches create-session, so the shared
+        create-and-attach flow applies.
+        */
+        try await createAndAttachRemoteSession(
+            command: GhostexRemoteCommand.createChatSession,
+            description: "create Quick session",
+            on: server,
             using: serverManager,
             sessionManager: sessionManager
         )
@@ -183,6 +217,7 @@ final class GhostexSidebarStore: ObservableObject {
     func createAgentSession(
         _ agent: GhostexAgentLauncher,
         in project: GhostexProjectGroup,
+        on server: Server,
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
@@ -192,6 +227,7 @@ final class GhostexSidebarStore: ObservableObject {
         try await createAndAttachRemoteSession(
             command: GhostexRemoteCommand.createAgent(agentId: agent.agentId, project: project),
             description: "start \(agent.name) in \(project.name)",
+            on: server,
             using: serverManager,
             sessionManager: sessionManager
         )
@@ -200,6 +236,7 @@ final class GhostexSidebarStore: ObservableObject {
     func runTerminalQuickAction(
         _ action: GhostexQuickAction,
         in project: GhostexProjectGroup,
+        on server: Server,
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
@@ -209,6 +246,7 @@ final class GhostexSidebarStore: ObservableObject {
         try await createAndAttachRemoteSession(
             command: GhostexRemoteCommand.runAction(commandId: action.commandId, project: project),
             description: "run \(action.name) in \(project.name)",
+            on: server,
             using: serverManager,
             sessionManager: sessionManager
         )
@@ -225,13 +263,10 @@ final class GhostexSidebarStore: ObservableObject {
     private func createAndAttachRemoteSession(
         command: String,
         description: String,
+        on server: Server,
         using serverManager: ServerManager,
         sessionManager: ConnectionSessionManager
     ) async throws {
-        guard let server = selectedServer(from: serverManager.servers) else {
-            throw GhostexError("Select a Ghostex host before creating a session.")
-        }
-
         /*
         CDXC:iOSGhostexSidebar 2026-05-28-17:43:
         Creating a project session from mobile should match Android and macOS behavior: ask the Mac app to create the ZMX-backed terminal, refresh the sidebar inventory, then attach the new session immediately when the CLI returns a stable session id.
@@ -245,19 +280,20 @@ final class GhostexSidebarStore: ObservableObject {
         if lastError != nil {
             lastError = nil
         }
-        appendLog("Running Ghostex action: \(description).")
+        appendLog("Running Ghostex action: \(description) on \(server.displayAddress).")
         do {
             let output = try await execute(command, on: server)
             appendLog("Action finished: \(description).")
-            await loadSessions(using: serverManager)
+            await loadInventory(for: server)
 
             guard let createdSessionId = GhostexCreateSessionResult.createdSessionId(from: output) else {
                 throw GhostexError("Ghostex created the session but did not return its session id.")
             }
-            guard let createdSession = sessions.first(where: { $0.sessionId == createdSessionId }) else {
+            let refreshedSessions = inventoriesByServerId[server.id]?.sessions ?? []
+            guard let createdSession = refreshedSessions.first(where: { $0.sessionId == createdSessionId }) else {
                 throw GhostexError("Ghostex created the session, but it was not present after refresh.")
             }
-            try await attach(createdSession, using: serverManager, sessionManager: sessionManager)
+            try await attach(createdSession, on: server, using: serverManager, sessionManager: sessionManager)
             isRunningAction = false
         } catch {
             isRunningAction = false
@@ -267,7 +303,12 @@ final class GhostexSidebarStore: ObservableObject {
         }
     }
 
-    func moveProject(_ project: GhostexProjectGroup, direction: String, using serverManager: ServerManager) {
+    func moveProject(
+        _ project: GhostexProjectGroup,
+        direction: String,
+        on server: Server,
+        using serverManager: ServerManager
+    ) {
         guard !project.projectId.isEmpty else {
             lastError = "This project does not have a Ghostex project id."
             return
@@ -276,11 +317,31 @@ final class GhostexSidebarStore: ObservableObject {
             GhostexRemoteCommand.moveProject(project, direction: direction),
             description: "move project \(direction) \(project.name)",
             refreshAfter: true,
+            on: server,
             using: serverManager
         )
     }
 
-    func renameSession(_ session: GhostexRemoteSession, title: String, using serverManager: ServerManager) {
+    func restoreRecentProject(
+        _ project: GhostexRecentProject,
+        on server: Server,
+        using serverManager: ServerManager
+    ) {
+        runRemote(
+            GhostexRemoteCommand.restoreRecentProject(project),
+            description: "restore recent project \(project.title)",
+            refreshAfter: true,
+            on: server,
+            using: serverManager
+        )
+    }
+
+    func renameSession(
+        _ session: GhostexRemoteSession,
+        title: String,
+        on server: Server,
+        using serverManager: ServerManager
+    ) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             lastError = "Session title cannot be empty."
@@ -290,6 +351,7 @@ final class GhostexSidebarStore: ObservableObject {
             GhostexRemoteCommand.renameSession(session, title: trimmed),
             description: "rename \(session.sessionId)",
             refreshAfter: true,
+            on: server,
             using: serverManager
         )
     }
@@ -313,9 +375,9 @@ final class GhostexSidebarStore: ObservableObject {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                if self?.selectedServer(from: serverManager.servers) != nil {
+                if !serverManager.servers.isEmpty {
                     let startedAt = Date()
-                    await self?.loadSessions(using: serverManager, showsRefreshIndicator: false)
+                    await self?.loadAllInventories(using: serverManager, showsRefreshIndicator: false)
                     guard !Task.isCancelled else { break }
                     let elapsed = Date().timeIntervalSince(startedAt)
                     let delaySeconds = elapsed >= (self?.slowPollThresholdSeconds ?? 10)
@@ -334,30 +396,57 @@ final class GhostexSidebarStore: ObservableObject {
         pollTask = nil
     }
 
-    func isProjectCollapsed(_ project: GhostexProjectGroup) -> Bool {
-        collapsedProjectKeys.contains(project.id)
+    func isMachineCollapsed(_ server: Server) -> Bool {
+        collapsedMachineKeys.contains(server.id.uuidString)
     }
 
-    func toggleProjectCollapse(_ project: GhostexProjectGroup) {
-        if collapsedProjectKeys.contains(project.id) {
-            collapsedProjectKeys.remove(project.id)
+    func toggleMachineCollapse(_ server: Server) {
+        /*
+        CDXC:iOSGhostexMultiMachine 2026-07-18:
+        Machine sections collapse like projects and named session groups:
+        state lives in this shared store for the current app run only.
+        */
+        let key = server.id.uuidString
+        if collapsedMachineKeys.contains(key) {
+            collapsedMachineKeys.remove(key)
         } else {
-            collapsedProjectKeys.insert(project.id)
+            collapsedMachineKeys.insert(key)
         }
     }
 
-    func isSessionGroupCollapsed(_ group: GhostexProjectSessionGroup, in project: GhostexProjectGroup) -> Bool {
-        collapsedSessionGroupKeys.contains(sessionGroupCollapseKey(project: project, group: group))
+    func isProjectCollapsed(_ project: GhostexProjectGroup, on server: Server) -> Bool {
+        collapsedProjectKeys.contains(projectCollapseKey(serverId: server.id, projectKey: project.id))
     }
 
-    func toggleSessionGroupCollapse(_ group: GhostexProjectSessionGroup, in project: GhostexProjectGroup) {
+    func toggleProjectCollapse(_ project: GhostexProjectGroup, on server: Server) {
+        let key = projectCollapseKey(serverId: server.id, projectKey: project.id)
+        if collapsedProjectKeys.contains(key) {
+            collapsedProjectKeys.remove(key)
+        } else {
+            collapsedProjectKeys.insert(key)
+        }
+    }
+
+    func isSessionGroupCollapsed(
+        _ group: GhostexProjectSessionGroup,
+        in project: GhostexProjectGroup,
+        on server: Server
+    ) -> Bool {
+        collapsedSessionGroupKeys.contains(sessionGroupCollapseKey(serverId: server.id, project: project, group: group))
+    }
+
+    func toggleSessionGroupCollapse(
+        _ group: GhostexProjectSessionGroup,
+        in project: GhostexProjectGroup,
+        on server: Server
+    ) {
         /*
         CDXC:iOSGhostexSidebarParity 2026-07-12:
         Named GPUI session groups collapse like projects do: state lives in
         this shared store for the current app run, so reopening the sessions
         page preserves the expanded groups without persisting across restarts.
         */
-        let key = sessionGroupCollapseKey(project: project, group: group)
+        let key = sessionGroupCollapseKey(serverId: server.id, project: project, group: group)
         if collapsedSessionGroupKeys.contains(key) {
             collapsedSessionGroupKeys.remove(key)
         } else {
@@ -365,31 +454,61 @@ final class GhostexSidebarStore: ObservableObject {
         }
     }
 
-    private func sessionGroupCollapseKey(project: GhostexProjectGroup, group: GhostexProjectSessionGroup) -> String {
-        "\(project.id)\u{1F}\(group.id)"
+    private func collapseKeyPrefix(for serverId: UUID) -> String {
+        serverId.uuidString + "\u{1F}"
     }
 
-    private func loadSessions(using serverManager: ServerManager, showsRefreshIndicator: Bool = true) async {
-        guard let server = selectedServer(from: serverManager.servers) else {
-            publishSnapshot(.empty)
-            lastError = "Add or select a server to use as the Ghostex host."
+    private func projectCollapseKey(serverId: UUID, projectKey: String) -> String {
+        collapseKeyPrefix(for: serverId) + projectKey
+    }
+
+    private func sessionGroupCollapseKey(
+        serverId: UUID,
+        project: GhostexProjectGroup,
+        group: GhostexProjectSessionGroup
+    ) -> String {
+        collapseKeyPrefix(for: serverId) + "\(project.id)\u{1F}\(group.id)"
+    }
+
+    private func loadAllInventories(using serverManager: ServerManager, showsRefreshIndicator: Bool = true) async {
+        let servers = serverManager.servers
+        guard !servers.isEmpty else {
+            inventoriesByServerId = [:]
+            knownProjectKeysByServerId = [:]
+            lastFingerprintByServerId = [:]
+            lastError = "Add a server to use as the Ghostex host."
             appendLog("Refresh skipped: no Ghostex host server is available.")
             return
         }
 
+        let currentServerIds = Set(servers.map(\.id))
+        if inventoriesByServerId.keys.contains(where: { !currentServerIds.contains($0) }) {
+            inventoriesByServerId = inventoriesByServerId.filter { currentServerIds.contains($0.key) }
+            knownProjectKeysByServerId = knownProjectKeysByServerId.filter { currentServerIds.contains($0.key) }
+            lastFingerprintByServerId = lastFingerprintByServerId.filter { currentServerIds.contains($0.key) }
+        }
+        if showsRefreshIndicator, lastError != nil {
+            lastError = nil
+        }
+
+        await withTaskGroup(of: Void.self) { group in
+            for server in servers {
+                group.addTask { @MainActor [weak self] in
+                    await self?.loadInventory(for: server, showsRefreshIndicator: showsRefreshIndicator)
+                }
+            }
+        }
+    }
+
+    private func loadInventory(for server: Server, showsRefreshIndicator: Bool = true) async {
         if showsRefreshIndicator {
-            beginRefresh()
+            beginRefresh(for: server.id)
+            appendLog("Refreshing Ghostex sessions from \(server.displayAddress).")
         }
         defer {
             if showsRefreshIndicator {
-                endRefresh()
+                endRefresh(for: server.id)
             }
-        }
-        if lastError != nil {
-            lastError = nil
-        }
-        if showsRefreshIndicator {
-            appendLog("Refreshing Ghostex sessions from \(server.displayAddress).")
         }
 
         do {
@@ -399,17 +518,18 @@ final class GhostexSidebarStore: ObservableObject {
                 try GhostexSessionListSnapshot.parse(from: Data(output.utf8))
             }.value
             guard !Task.isCancelled else { return }
-            let isUnchanged = snapshot.fingerprint == lastSessionListFingerprint
+            let isUnchanged = snapshot.fingerprint == lastFingerprintByServerId[server.id]
             if !isUnchanged {
-                publishSnapshot(snapshot)
-            }
-            if selectedServerId != server.id {
-                selectedServerId = server.id
-            }
-            if !isUnchanged {
-                appendLog("Refresh returned \(snapshot.sessions.count) sessions.")
+                publishSnapshot(snapshot, for: server)
+                appendLog("Refresh returned \(snapshot.sessions.count) sessions from \(server.displayAddress).")
             } else if showsRefreshIndicator {
-                appendLog("Refresh returned unchanged session snapshot.")
+                appendLog("Refresh returned unchanged session snapshot from \(server.displayAddress).")
+            }
+            if inventoriesByServerId[server.id]?.lastError != nil {
+                inventoriesByServerId[server.id]?.lastError = nil
+            }
+            if inventoriesByServerId[server.id]?.hasLoaded == false {
+                inventoriesByServerId[server.id]?.hasLoaded = true
             }
             Task { [weak self] in
                 await self?.submitStagedFirstPromptTitleCommands(from: snapshot.sessions, on: server)
@@ -420,31 +540,38 @@ final class GhostexSidebarStore: ObservableObject {
             return
         } catch {
             let message = error.localizedDescription
-            lastError = message
-            appendLog("Refresh failed: \(message)")
+            var inventory = inventoriesByServerId[server.id] ?? GhostexMachineInventory()
+            inventory.lastError = message
+            inventory.hasLoaded = true
+            inventoriesByServerId[server.id] = inventory
+            if showsRefreshIndicator {
+                lastError = "\(server.name): \(message)"
+            }
+            appendLog("Refresh failed for \(server.displayAddress): \(message)")
         }
     }
 
-    private func publishSnapshot(_ snapshot: GhostexSessionListSnapshot) {
-        let currentProjectKeys = Set(snapshot.projectGroups.map(\.id))
-        var nextCollapsedProjectKeys = collapsedProjectKeys.intersection(currentProjectKeys)
-        nextCollapsedProjectKeys.formUnion(currentProjectKeys.subtracting(knownProjectKeys))
-        knownProjectKeys = currentProjectKeys
-        collapsedProjectKeys = nextCollapsedProjectKeys
-        sessions = snapshot.sessions
-        projectGroups = snapshot.projectGroups
-        agents = snapshot.agents
-        lastSessionListFingerprint = snapshot.fingerprint
-    }
+    private func publishSnapshot(_ snapshot: GhostexSessionListSnapshot, for server: Server) {
+        let currentProjectKeys = Set(snapshot.projectGroups.map {
+            projectCollapseKey(serverId: server.id, projectKey: $0.id)
+        })
+        let knownKeys = knownProjectKeysByServerId[server.id] ?? []
+        let serverPrefix = collapseKeyPrefix(for: server.id)
+        let otherServerCollapsedKeys = collapsedProjectKeys.filter { !$0.hasPrefix(serverPrefix) }
+        var nextServerCollapsedKeys = collapsedProjectKeys.intersection(currentProjectKeys)
+        nextServerCollapsedKeys.formUnion(currentProjectKeys.subtracting(knownKeys))
+        knownProjectKeysByServerId[server.id] = currentProjectKeys
+        collapsedProjectKeys = otherServerCollapsedKeys.union(nextServerCollapsedKeys)
 
-    private func resetRuntimeProjectCollapseState() {
-        knownProjectKeys.removeAll()
-        collapsedProjectKeys.removeAll()
-        collapsedSessionGroupKeys.removeAll()
-        lastSessionListFingerprint = ""
-        sessions = []
-        projectGroups = []
-        agents = []
+        var inventory = inventoriesByServerId[server.id] ?? GhostexMachineInventory()
+        inventory.sessions = snapshot.sessions
+        inventory.projectGroups = snapshot.projectGroups
+        inventory.agents = snapshot.agents
+        inventory.recentProjects = snapshot.recentProjects
+        inventory.lastError = nil
+        inventory.hasLoaded = true
+        inventoriesByServerId[server.id] = inventory
+        lastFingerprintByServerId[server.id] = snapshot.fingerprint
     }
 
     private func suspendRefreshesForAttach() -> Bool {
@@ -453,7 +580,8 @@ final class GhostexSidebarStore: ObservableObject {
         refreshTask = nil
         pollTask?.cancel()
         pollTask = nil
-        activeRefreshCount = 0
+        activeRefreshCountsByServerId = [:]
+        refreshingServerIds = []
         isRefreshing = false
         return shouldResumePollingOnFailure
     }
@@ -484,23 +612,20 @@ final class GhostexSidebarStore: ObservableObject {
         _ command: String,
         description: String,
         refreshAfter: Bool,
+        on server: Server,
         using serverManager: ServerManager
     ) {
         Task { [weak self] in
             guard let self else { return }
-            guard let server = selectedServer(from: serverManager.servers) else {
-                lastError = "Select a Ghostex host before running \(description)."
-                return
-            }
 
             isRunningAction = true
             lastError = nil
-            appendLog("Running Ghostex action: \(description).")
+            appendLog("Running Ghostex action: \(description) on \(server.displayAddress).")
             do {
                 _ = try await execute(command, on: server)
                 appendLog("Action finished: \(description).")
                 if refreshAfter {
-                    await loadSessions(using: serverManager)
+                    await loadInventory(for: server)
                 }
             } catch {
                 lastError = error.localizedDescription
@@ -513,13 +638,9 @@ final class GhostexSidebarStore: ObservableObject {
     private func runProjectActionQueue(
         _ action: String,
         sessions: [GhostexRemoteSession],
+        on server: Server,
         using serverManager: ServerManager
     ) async {
-        guard let server = selectedServer(from: serverManager.servers) else {
-            lastError = "Select a Ghostex host before running project actions."
-            return
-        }
-
         isRunningAction = true
         lastError = nil
         for session in sessions {
@@ -536,7 +657,7 @@ final class GhostexSidebarStore: ObservableObject {
             }
         }
         isRunningAction = false
-        await loadSessions(using: serverManager)
+        await loadInventory(for: server)
     }
 
     private func execute(_ command: String, on server: Server) async throws -> String {
@@ -575,21 +696,18 @@ final class GhostexSidebarStore: ObservableObject {
         UserDefaults.standard.set(logs, forKey: logsKey)
     }
 
-    private func beginRefresh() {
-        activeRefreshCount += 1
+    private func beginRefresh(for serverId: UUID) {
+        activeRefreshCountsByServerId[serverId, default: 0] += 1
+        refreshingServerIds.insert(serverId)
         isRefreshing = true
     }
 
-    private func endRefresh() {
-        activeRefreshCount = max(0, activeRefreshCount - 1)
-        isRefreshing = activeRefreshCount > 0
-    }
-
-    private func persistSelectedServerId() {
-        if let selectedServerId {
-            UserDefaults.standard.set(selectedServerId.uuidString, forKey: selectedServerKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: selectedServerKey)
+    private func endRefresh(for serverId: UUID) {
+        let next = max(0, (activeRefreshCountsByServerId[serverId] ?? 0) - 1)
+        activeRefreshCountsByServerId[serverId] = next
+        if next == 0 {
+            refreshingServerIds.remove(serverId)
         }
+        isRefreshing = !refreshingServerIds.isEmpty
     }
 }

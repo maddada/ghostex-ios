@@ -467,22 +467,28 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
     }
 
     var toolbarTitle: String {
+        /*
+        CDXC:iOSTerminalAccessories 2026-07-18:
+        Toolbar key caps for the default layout are fixed ASCII matching the Android
+        toolbar (ESC/SHIFT/NEWLN/HOME/END/PGUP/TAB/CTRL/ALT/PGDN) and must not be
+        localized; localized names stay in listTitle for settings and accessibility.
+        */
         switch self {
-        case .controlModifier: return String(localized: "Ctrl")
-        case .alternateModifier: return String(localized: "Alt")
+        case .controlModifier: return "CTRL"
+        case .alternateModifier: return "ALT"
         case .commandModifier: return String(localized: "Cmd")
-        case .shiftModifier: return String(localized: "Shift")
-        case .escape: return String(localized: "Esc")
-        case .tab: return String(localized: "Tab")
+        case .shiftModifier: return "SHIFT"
+        case .escape: return "ESC"
+        case .tab: return "TAB"
         case .shiftTab: return String(localized: "S-Tab")
         case .enter: return String(localized: "Enter")
         case .backspace: return String(localized: "Bksp")
         case .delete: return String(localized: "Del")
         case .insert: return String(localized: "Ins")
-        case .home: return String(localized: "Home")
-        case .end: return String(localized: "End")
-        case .pageUp: return String(localized: "PgUp")
-        case .pageDown: return String(localized: "PgDn")
+        case .home: return "HOME"
+        case .end: return "END"
+        case .pageUp: return "PGUP"
+        case .pageDown: return "PGDN"
         case .arrowUp, .arrowDown, .arrowLeft, .arrowRight: return ""
         case .f1: return String(localized: "F1")
         case .f2: return String(localized: "F2")
@@ -502,7 +508,7 @@ enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, I
         case .ctrlL: return String(localized: "^L")
         case .ctrlA: return String(localized: "^A")
         case .ctrlE: return String(localized: "^E")
-        case .ctrlJ: return String(localized: "^J")
+        case .ctrlJ: return "NEWLN"
         case .ctrlK: return String(localized: "^K")
         case .ctrlU: return String(localized: "^U")
         case .unknown: return String(localized: "?")
